@@ -23,7 +23,9 @@ function HabitHistoryEditor({ habit, onClose }: {
   habit: Habit;
   onClose: () => void;
 }) {
-  const { toggleHabitDate, today } = useApp();
+  const { toggleHabitDate, setHabitNote, today } = useApp();
+  const [noteDate, setNoteDate] = useState(today);
+  const [noteDraft, setNoteDraft] = useState(habit.notes[today] ?? "");
   const months: Record<string, string[]> = {};
   const allDays = getLastNDays(90);
 
@@ -34,6 +36,12 @@ function HabitHistoryEditor({ habit, onClose }: {
   });
 
   const monthKeys = Object.keys(months).sort().reverse();
+  const sortedNotes = Object.entries(habit.notes).sort((a, b) => b[0].localeCompare(a[0]));
+
+  const selectNoteDate = (d: string) => {
+    setNoteDate(d);
+    setNoteDraft(habit.notes[d] ?? "");
+  };
 
   return (
     <>
@@ -47,6 +55,46 @@ function HabitHistoryEditor({ habit, onClose }: {
 
         <div className="lo-history-editor-hint">
           Click any day to toggle completion. Editing the last 90 days.
+        </div>
+
+        <div className="lo-detail-section">
+          <div className="lo-detail-section-header"><span>Log entry</span></div>
+          <div className="lo-habit-log-form">
+            <input type="date" value={noteDate} max={today} onChange={e => selectNoteDate(e.target.value)} />
+            <textarea
+              className="lo-detail-notes"
+              placeholder="How did it go? Any details worth remembering..."
+              value={noteDraft}
+              onChange={e => setNoteDraft(e.target.value)}
+              rows={2}
+            />
+            <button className="lo-btn lo-btn-primary lo-btn-sm" onClick={() => setHabitNote(habit.id, noteDate, noteDraft)}>
+              Save entry
+            </button>
+          </div>
+
+          {sortedNotes.length > 0 && (
+            <div className="lo-habit-log-list">
+              {sortedNotes.map(([date, note]) => (
+                <div key={date} className="lo-habit-log-entry">
+                  <div className="lo-habit-log-entry-header">
+                    <span className="lo-habit-log-date">{formatDateLabel(date)}</span>
+                    <button
+                      className="lo-delete-btn lo-delete-btn-sm"
+                      onClick={() => setHabitNote(habit.id, date, "")}
+                      title="Delete entry"
+                    >×</button>
+                  </div>
+                  <textarea
+                    className="lo-detail-notes"
+                    value={note}
+                    onChange={e => setHabitNote(habit.id, date, e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="lo-history-editor-scroll">
@@ -71,15 +119,17 @@ function HabitHistoryEditor({ habit, onClose }: {
                     const done = habit.completedDates.includes(d);
                     const isToday = d === today;
                     const isFuture = d > today;
+                    const hasNote = Boolean(habit.notes[d]);
                     return (
                       <button
                         key={d}
                         className={`lo-history-cal-day ${done ? "done" : ""} ${isToday ? "today" : ""} ${isFuture ? "future" : ""}`}
-                        onClick={() => !isFuture && toggleHabitDate(habit.id, d)}
+                        onClick={() => { if (!isFuture) { toggleHabitDate(habit.id, d); selectNoteDate(d); } }}
                         disabled={isFuture}
-                        title={formatDateLabel(d) + (done ? " ✓" : "")}
+                        title={formatDateLabel(d) + (done ? " ✓" : "") + (hasNote ? " — has log entry" : "")}
                       >
                         {new Date(d + "T00:00:00").getDate()}
+                        {hasNote && <span className="lo-history-cal-note-dot" />}
                       </button>
                     );
                   })}

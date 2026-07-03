@@ -56,6 +56,7 @@ export interface Habit {
   emoji: string;
   frequency: string;
   completedDates: string[];
+  notes: Record<string, string>;
 }
 
 export interface JournalEntry {
@@ -85,8 +86,9 @@ interface AppContextType {
   addEvent: (event: Omit<Event, "id">) => Promise<void>;
   deleteEvent: (id: number) => Promise<void>;
   habits: Habit[];
-  addHabit: (habit: Omit<Habit, "id" | "completedDates">) => Promise<void>;
+  addHabit: (habit: Omit<Habit, "id" | "completedDates" | "notes">) => Promise<void>;
   toggleHabitDate: (id: number, date: string) => Promise<void>;
+  setHabitNote: (id: number, date: string, note: string) => Promise<void>;
   deleteHabit: (id: number) => Promise<void>;
   journal: JournalEntry[];
   addJournalEntry: (entry: Omit<JournalEntry, "id">) => Promise<void>;
@@ -208,7 +210,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await del(`/events/${id}`);
   };
 
-  const addHabit = async (habit: Omit<Habit, "id" | "completedDates">) => {
+  const addHabit = async (habit: Omit<Habit, "id" | "completedDates" | "notes">) => {
     const created = await post("/habits", habit);
     setHabits(prev => [...prev, created]);
   };
@@ -216,6 +218,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleHabitDate = async (id: number, date: string) => {
     const { completedDates } = await post(`/habits/${id}/toggle`, { date });
     setHabits(prev => prev.map(h => h.id === id ? { ...h, completedDates } : h));
+  };
+
+  const setHabitNote = async (id: number, date: string, note: string) => {
+    const { notes } = await post(`/habits/${id}/note`, { date, note });
+    setHabits(prev => prev.map(h => h.id === id ? { ...h, notes } : h));
   };
 
   const deleteHabit = async (id: number) => {
@@ -278,7 +285,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tasks, addTask, updateTask, toggleTask, deleteTask, linkTaskToMatter,
       addStep, updateStep, deleteStep,
       events, addEvent, deleteEvent,
-      habits, addHabit, toggleHabitDate, deleteHabit,
+      habits, addHabit, toggleHabitDate, setHabitNote, deleteHabit,
       journal, addJournalEntry, updateJournalEntry, deleteJournalEntry,
       matters, addMatter, updateMatter, deleteMatter,
       addMatterAction, updateMatterAction, deleteMatterAction,

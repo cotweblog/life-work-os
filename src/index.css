@@ -1502,6 +1502,21 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
   font-style: italic;
 }
 
+.lo-habit-log-form { display: flex; flex-direction: column; gap: 8px; }
+.lo-habit-log-form input[type="date"] { width: auto; align-self: flex-start; }
+
+.lo-habit-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.lo-habit-log-entry { display: flex; flex-direction: column; gap: 6px; }
+.lo-habit-log-entry-header { display: flex; align-items: center; justify-content: space-between; }
+.lo-habit-log-date { font-size: 11px; color: var(--lo-text-3); font-family: 'DM Mono', monospace; }
+
 .lo-history-editor-scroll {
   flex: 1;
   overflow-y: auto;
@@ -1546,6 +1561,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-history-cal-empty { height: 34px; }
 
 .lo-history-cal-day {
+  position: relative;
   height: 34px;
   border-radius: var(--lo-radius-sm);
   border: 1px solid var(--lo-border);
@@ -1559,6 +1575,17 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
   align-items: center;
   justify-content: center;
 }
+.lo-history-cal-note-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--lo-accent-2);
+}
+.lo-history-cal-day.done .lo-history-cal-note-dot { background: #fff; }
 .lo-history-cal-day:hover:not(:disabled) {
   background: var(--lo-surface-2);
   border-color: var(--lo-accent);

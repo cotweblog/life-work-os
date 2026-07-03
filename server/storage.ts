@@ -43,6 +43,7 @@ export interface Habit {
   emoji: string;
   frequency: string;
   completedDates: string[];
+  notes: Record<string, string>;
 }
 
 export interface JournalEntry {
@@ -94,7 +95,12 @@ function load(): DB {
     fs.writeFileSync(DATA_FILE, JSON.stringify(fresh, null, 2));
     return fresh;
   }
-  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) as DB;
+  // Backfill fields added to the schema after some data was already persisted.
+  for (const habit of parsed.habits) {
+    if (!habit.notes) habit.notes = {};
+  }
+  return parsed;
 }
 
 export const db: DB = load();

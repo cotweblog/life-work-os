@@ -99,7 +99,7 @@ router.get("/habits", (_req, res) => res.json(db.habits));
 
 router.post("/habits", (req, res) => {
   const body = req.body as Pick<Habit, "name" | "emoji" | "frequency">;
-  const habit: Habit = { id: allocId(), ...body, completedDates: [] };
+  const habit: Habit = { id: allocId(), ...body, completedDates: [], notes: {} };
   db.habits.push(habit);
   persist();
   res.json(habit);
@@ -115,6 +115,20 @@ router.post("/habits/:id/toggle", (req, res) => {
     : [...habit.completedDates, date];
   persist();
   res.json({ completedDates: habit.completedDates });
+});
+
+router.post("/habits/:id/note", (req, res) => {
+  const id = Number(req.params.id);
+  const habit = db.habits.find(h => h.id === id);
+  if (!habit) return notFound(res);
+  const { date, note } = req.body as { date: string; note: string };
+  if (note.trim()) {
+    habit.notes[date] = note;
+  } else {
+    delete habit.notes[date];
+  }
+  persist();
+  res.json({ notes: habit.notes });
 });
 
 router.delete("/habits/:id", (req, res) => {
