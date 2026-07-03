@@ -314,7 +314,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [form, setForm] = useState<{ text: string; priority: Task["priority"]; due: string; category: string }>({ text: "", priority: "medium", due: "", category: defaultCategory });
+  const [form, setForm] = useState<{ text: string; priority: Task["priority"]; due: string; category: string; matterId: number | null }>({ text: "", priority: "medium", due: "", category: defaultCategory, matterId: null });
 
   const base = categoryFilter
     ? tasks.filter(t => t.category === categoryFilter)
@@ -333,8 +333,8 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
 
   const handleAdd = () => {
     if (!form.text.trim()) return;
-    addTask({ ...form, matterId: null });
-    setForm({ text: "", priority: "medium", due: "", category: defaultCategory });
+    addTask(form);
+    setForm({ text: "", priority: "medium", due: "", category: defaultCategory, matterId: null });
     setShowForm(false);
   };
 
@@ -403,6 +403,17 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
             </select>
             <input type="date" value={form.due} onChange={e => setForm(p => ({ ...p, due: e.target.value }))} />
           </div>
+          {isWork && matters.length > 0 && (
+            <div className="lo-form-row">
+              <select
+                value={form.matterId ?? ""}
+                onChange={e => setForm(p => ({ ...p, matterId: e.target.value ? Number(e.target.value) : null }))}
+              >
+                <option value="">No matter</option>
+                {matters.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="lo-form-actions">
             <button className="lo-btn lo-btn-primary" onClick={handleAdd}>Add</button>
             <button className="lo-btn lo-btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
