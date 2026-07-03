@@ -17,7 +17,7 @@ function MatterDetail({ matter, onClose, today }: {
   onClose: () => void;
   today: string;
 }) {
-  const { tasks, addTask, toggleTask, linkTaskToMatter, updateMatter, deleteMatter, addMatterAction, updateMatterAction, deleteMatterAction } = useApp();
+  const { tasks, addTask, updateTask, toggleTask, linkTaskToMatter, updateMatter, deleteMatter, addMatterAction, updateMatterAction, deleteMatterAction } = useApp();
   const [newAction, setNewAction] = useState({ description: "", sentTo: "", sentDate: today, neededFrom: "" });
   const [showNewAction, setShowNewAction] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
@@ -140,8 +140,18 @@ function MatterDetail({ matter, onClose, today }: {
                     {a.status === "received" ? "✓" : ""}
                   </button>
                   <div className="lo-matter-action-meta">
-                    <span className="lo-matter-action-desc">{a.description}</span>
-                    {a.sentTo && <span className="lo-matter-action-who">→ {a.sentTo}</span>}
+                    <input
+                      className="lo-matter-action-desc"
+                      value={a.description}
+                      onChange={e => updateMatterAction(matter.id, a.id, { description: e.target.value })}
+                      placeholder="What was sent / delegated…"
+                    />
+                    <input
+                      className="lo-matter-action-who"
+                      value={a.sentTo}
+                      onChange={e => updateMatterAction(matter.id, a.id, { sentTo: e.target.value })}
+                      placeholder="To whom (optional)"
+                    />
                   </div>
                   <button className="lo-delete-btn lo-delete-btn-sm" onClick={() => deleteMatterAction(matter.id, a.id)}>×</button>
                 </div>
@@ -231,7 +241,11 @@ function MatterDetail({ matter, onClose, today }: {
                 >
                   {t.done ? "✓" : ""}
                 </button>
-                <span className="lo-matter-task-text">{t.text}</span>
+                <input
+                  className="lo-matter-task-text"
+                  value={t.text}
+                  onChange={e => updateTask(t.id, { text: e.target.value })}
+                />
                 <button
                   className="lo-delete-btn lo-delete-btn-sm"
                   title="Unlink task"

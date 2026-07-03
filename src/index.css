@@ -1704,8 +1704,9 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-matter-action-card.received { border-color: #b7dfc0; background: #f6fbf7; opacity: .8; }
 .lo-matter-action-top { display: flex; align-items: flex-start; gap: 8px; }
 .lo-matter-action-meta { flex: 1; min-width: 0; }
-.lo-matter-action-desc { display: block; font-size: 13px; font-weight: 600; color: var(--lo-text); }
-.lo-matter-action-who { display: block; font-size: 12px; color: var(--lo-accent); margin-top: 2px; }
+.lo-matter-action-desc { display: block; width: 100%; font-family: inherit; font-size: 13px; font-weight: 600; color: var(--lo-text); border: none; background: transparent; padding: 0; outline: none; }
+.lo-matter-action-who { display: block; width: 100%; font-family: inherit; font-size: 12px; color: var(--lo-accent); margin-top: 2px; border: none; background: transparent; padding: 0; outline: none; }
+.lo-matter-action-desc::placeholder, .lo-matter-action-who::placeholder { color: var(--lo-text-muted); font-weight: 400; }
 .lo-matter-action-dates { display: flex; gap: 16px; padding-left: 32px; }
 .lo-matter-action-field { display: flex; align-items: center; gap: 6px; }
 .lo-matter-action-field label { font-size: 11px; color: var(--lo-text-muted); font-weight: 600; }
@@ -1727,7 +1728,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-matter-task-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--lo-border-light, #f0f0ec); }
 .lo-matter-task-row:last-child { border-bottom: none; }
 .lo-matter-task-row.done .lo-matter-task-text { text-decoration: line-through; color: var(--lo-text-muted); }
-.lo-matter-task-text { flex: 1; font-size: 13px; color: var(--lo-text); }
+.lo-matter-task-text { flex: 1; font-family: inherit; font-size: 13px; color: var(--lo-text); border: none; background: transparent; padding: 0; outline: none; }
 .lo-matter-task-badge { font-size: 11px; font-weight: 600; color: var(--lo-accent); background: color-mix(in srgb, var(--lo-accent) 10%, transparent); padding: 2px 7px; border-radius: 10px; }
 .lo-matter-task-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 .lo-matter-new-task { border: 1px dashed var(--lo-border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
