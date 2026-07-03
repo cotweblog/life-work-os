@@ -13,6 +13,11 @@ try {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// Railway (and most PaaS hosts) sit behind one reverse proxy hop; trusting it
+// makes req.ip reflect the real client IP from X-Forwarded-For instead of the
+// proxy's own address, which the login rate-limiter in auth.ts depends on.
+app.set("trust proxy", 1);
+
 app.use(requireAppPassword);
 app.use(express.json());
 app.use("/api", router);
