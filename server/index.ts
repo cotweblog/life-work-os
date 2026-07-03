@@ -1,16 +1,32 @@
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import express from "express";
 import { router } from "./routes.js";
 import { requireAppPassword } from "./auth.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Loads .env from an explicit path next to this file rather than relying on
+// process.cwd() — process.loadEnvFile() proved unreliable under some
+// process managers (e.g. systemd + tsx on at least one Node 20.x build),
+// silently leaving env vars like APP_PASSWORD unset with no error surfaced.
 try {
-  process.loadEnvFile();
+  const envPath = path.join(__dirname, "..", ".env");
+  const envContent = fs.readFileSync(envPath, "utf8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim();
+    if (key && !(key in process.env)) process.env[key] = value;
+  }
 } catch {
   // no .env file present — fall back to whatever is already in process.env
 }
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 // Railway (and most PaaS hosts) sit behind one reverse proxy hop; trusting it
