@@ -96,13 +96,14 @@ function ImportPanel({ onClose, onImport }: {
 }
 
 /* ─── Task detail panel ────────────────────────────────────── */
-function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today }: {
+function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matterName }: {
   task: Task;
   onClose: () => void;
   onUpdate: (id: number, updates: Partial<Omit<Task, "id" | "steps">>) => void;
   onDelete: (id: number) => void;
   onToggle: (id: number) => void;
   today: string;
+  matterName: string | null;
 }) {
   const { addStep: ctxAddStep, updateStep: ctxUpdateStep, deleteStep: ctxDeleteStep } = useApp();
   const [newStep, setNewStep] = useState("");
@@ -206,6 +207,13 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today }: {
             )}
           </div>
 
+          {matterName && (
+            <div className="lo-detail-field">
+              <label>Matter</label>
+              <span className="lo-tag lo-tag-gray">◇ {matterName}</span>
+            </div>
+          )}
+
           {task.done && (
             <div className="lo-detail-field">
               <label>Completed</label>
@@ -296,7 +304,7 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today }: {
 
 /* ─── Main Tasks page ──────────────────────────────────────── */
 export default function Tasks({ categoryFilter }: { categoryFilter?: string } = {}) {
-  const { viewMode, tasks, addTask, updateTask, toggleTask, deleteTask, today } = useApp();
+  const { viewMode, tasks, matters, addTask, updateTask, toggleTask, deleteTask, today } = useApp();
   const isWork = viewMode === "work";
   const modeCategories: readonly string[] = isWork ? WORK_CATEGORIES : PERSONAL_CATEGORIES;
   const formCategories = categoryFilter ? [categoryFilter] : modeCategories;
@@ -321,6 +329,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
   });
 
   const selectedTask = tasks.find(t => t.id === selectedId) ?? null;
+  const matterName = (matterId: number | null) => matterId == null ? null : matters.find(m => m.id === matterId)?.name ?? null;
 
   const handleAdd = () => {
     if (!form.text.trim()) return;
@@ -347,6 +356,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
           onDelete={deleteTask}
           onToggle={toggleTask}
           today={today}
+          matterName={matterName(selectedTask.matterId)}
         />
       )}
 
@@ -422,6 +432,9 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
                 <div className="lo-task-meta">
                   <span className={`lo-tag lo-tag-${task.priority === "high" ? "red" : task.priority === "medium" ? "yellow" : "gray"}`}>{task.priority}</span>
                   <span className="lo-tag lo-tag-gray">{task.category}</span>
+                  {matterName(task.matterId) && (
+                    <span className="lo-tag lo-tag-gray">◇ {matterName(task.matterId)}</span>
+                  )}
                   {task.done && task.completedAt
                     ? <span className="lo-tag lo-tag-green">✓ {task.completedAt}</span>
                     : task.due && <span className={`lo-tag ${isOverdue ? "lo-tag-red" : "lo-tag-gray"}`}>{isOverdue ? "overdue · " : ""}{task.due}</span>
