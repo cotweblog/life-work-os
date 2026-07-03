@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { toLocalDateStr } from "@/lib/utils";
 
 export interface MatterAction {
   id: number;
@@ -41,13 +42,16 @@ export interface Task {
   steps: TaskStep[];
 }
 
-interface Event {
+export interface Event {
   id: number;
   title: string;
   date: string;
   time: string;
   allDay: boolean;
   category: string;
+  durationMinutes: number;
+  taskId: number | null;
+  matterId: number | null;
 }
 
 export interface Habit {
@@ -84,6 +88,7 @@ interface AppContextType {
   deleteStep: (taskId: number, stepId: number) => Promise<void>;
   events: Event[];
   addEvent: (event: Omit<Event, "id">) => Promise<void>;
+  updateEvent: (id: number, updates: Partial<Omit<Event, "id">>) => Promise<void>;
   deleteEvent: (id: number) => Promise<void>;
   habits: Habit[];
   addHabit: (habit: Omit<Habit, "id" | "completedDates" | "notes">) => Promise<void>;
@@ -108,7 +113,7 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null);
 
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = () => toLocalDateStr(new Date());
 
 const api = (path: string) => `${import.meta.env.BASE_URL}api${path}`;
 
@@ -205,6 +210,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setEvents(prev => [...prev, created]);
   };
 
+  const updateEvent = async (id: number, updates: Partial<Omit<Event, "id">>) => {
+    setEvents(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+    await patch(`/events/${id}`, updates);
+  };
+
   const deleteEvent = async (id: number) => {
     setEvents(prev => prev.filter(e => e.id !== id));
     await del(`/events/${id}`);
@@ -284,7 +294,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       viewMode, setViewMode,
       tasks, addTask, updateTask, toggleTask, deleteTask, linkTaskToMatter,
       addStep, updateStep, deleteStep,
-      events, addEvent, deleteEvent,
+      events, addEvent, updateEvent, deleteEvent,
       habits, addHabit, toggleHabitDate, setHabitNote, deleteHabit,
       journal, addJournalEntry, updateJournalEntry, deleteJournalEntry,
       matters, addMatter, updateMatter, deleteMatter,

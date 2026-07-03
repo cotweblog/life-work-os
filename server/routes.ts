@@ -87,6 +87,15 @@ router.post("/events", (req, res) => {
   res.json(event);
 });
 
+router.patch("/events/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const event = db.events.find(e => e.id === id);
+  if (!event) return notFound(res);
+  Object.assign(event, req.body);
+  persist();
+  res.json(event);
+});
+
 router.delete("/events/:id", (req, res) => {
   const id = Number(req.params.id);
   db.events = db.events.filter(e => e.id !== id);

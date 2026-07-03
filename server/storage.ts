@@ -35,6 +35,9 @@ export interface Event {
   time: string;
   allDay: boolean;
   category: string;
+  durationMinutes: number;
+  taskId: number | null;
+  matterId: number | null;
 }
 
 export interface Habit {
@@ -99,6 +102,11 @@ function load(): DB {
   // Backfill fields added to the schema after some data was already persisted.
   for (const habit of parsed.habits) {
     if (!habit.notes) habit.notes = {};
+  }
+  for (const event of parsed.events) {
+    if (event.durationMinutes == null) event.durationMinutes = 60;
+    if (event.taskId === undefined) event.taskId = null;
+    if (event.matterId === undefined) event.matterId = null;
   }
   return parsed;
 }

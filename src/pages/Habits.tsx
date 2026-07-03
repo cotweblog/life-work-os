@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp } from "@/context/AppContext";
 import type { Habit } from "@/context/AppContext";
+import { toLocalDateStr } from "@/lib/utils";
 
 const EMOJIS = ["🚶","💧","📖","🧘","🏋️","🥗","😴","📵","✍️","🎯","🌿","💊","🧹","🎵","🏃"];
 
@@ -8,7 +9,7 @@ function getLastNDays(n: number): string[] {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (n - 1 - i));
-    return d.toISOString().split("T")[0];
+    return toLocalDateStr(d);
   });
 }
 
@@ -170,7 +171,7 @@ export default function Habits() {
     let s = 0;
     const d = new Date();
     while (true) {
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = toLocalDateStr(d);
       if (habit.completedDates.includes(dateStr)) {
         s++;
         d.setDate(d.getDate() - 1);
