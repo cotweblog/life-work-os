@@ -210,7 +210,7 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matter
           {matterName && (
             <div className="lo-detail-field">
               <label>Matter</label>
-              <span className="lo-tag lo-tag-gray">◇ {matterName}</span>
+              <span className={`lo-tag ${task.matterId != null ? `lo-matter-c${task.matterId % 8}` : ""}`}>◇ {matterName}</span>
             </div>
           )}
 
@@ -320,16 +320,25 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
     ? tasks.filter(t => t.category === categoryFilter)
     : tasks.filter(t => modeCategories.includes(t.category));
 
-  const filtered = base.filter(t => {
-    if (filter === "today") return t.due === today;
-    if (filter === "done") return t.done;
-    if (filter === "open") return !t.done;
-    if (filter === "projects") return t.category === "projects";
-    return true;
-  });
+  const filtered = base
+    .filter(t => {
+      if (filter === "today") return t.due === today;
+      if (filter === "done") return t.done;
+      if (filter === "open") return !t.done;
+      if (filter === "projects") return t.category === "projects";
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      return a.due.localeCompare(b.due);
+    });
 
   const selectedTask = tasks.find(t => t.id === selectedId) ?? null;
   const matterName = (matterId: number | null) => matterId == null ? null : matters.find(m => m.id === matterId)?.name ?? null;
+  const matterColorClass = (matterId: number | null) => matterId == null ? "" : `lo-matter-c${matterId % 8}`;
 
   const handleAdd = () => {
     if (!form.text.trim()) return;
@@ -444,7 +453,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
                   <span className={`lo-tag lo-tag-${task.priority === "high" ? "red" : task.priority === "medium" ? "yellow" : "gray"}`}>{task.priority}</span>
                   <span className="lo-tag lo-tag-gray">{task.category}</span>
                   {matterName(task.matterId) && (
-                    <span className="lo-tag lo-tag-gray">◇ {matterName(task.matterId)}</span>
+                    <span className={`lo-tag ${matterColorClass(task.matterId)}`}>◇ {matterName(task.matterId)}</span>
                   )}
                   {task.done && task.completedAt
                     ? <span className="lo-tag lo-tag-green">✓ {task.completedAt}</span>

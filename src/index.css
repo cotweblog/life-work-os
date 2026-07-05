@@ -140,6 +140,18 @@ h3 { font-size: 14px; font-weight: 500; }
 .lo-tag-red { background: var(--lo-danger-light); color: var(--lo-danger); }
 .lo-tag-gray { background: var(--lo-surface-2); color: var(--lo-text-2); }
 
+/* Per-matter tag colors — deterministic by matter id, so each matter is
+   visually distinct at a glance instead of every "linked to a matter"
+   badge looking identical. */
+.lo-matter-c0 { background: #e3edfb; color: #2c5aa0; }
+.lo-matter-c1 { background: #f0e7fa; color: #6b3fa0; }
+.lo-matter-c2 { background: #dff5f3; color: #1f7a6c; }
+.lo-matter-c3 { background: #fbe8f0; color: #a03d6b; }
+.lo-matter-c4 { background: #e8eafd; color: #4451b8; }
+.lo-matter-c5 { background: #f5ece0; color: #8a5a2b; }
+.lo-matter-c6 { background: #e0f4f8; color: #1a7b8c; }
+.lo-matter-c7 { background: #fdeee0; color: #b0631f; }
+
 /* ── Inputs ── */
 input[type="text"],
 input[type="date"],
