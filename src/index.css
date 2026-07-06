@@ -566,7 +566,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 }
 .lo-week-allday-tag { margin-top: 4px; font-size: 10px; }
 
-.lo-week-grid-scroll { max-height: 560px; overflow-y: auto; position: relative; }
+.lo-week-grid-scroll { max-height: 680px; overflow-y: auto; position: relative; }
 .lo-week-grid { display: flex; position: relative; }
 .lo-week-hours-col { width: 44px; flex-shrink: 0; }
 .lo-week-hour-label {
@@ -601,7 +601,14 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
   z-index: 1;
 }
 .lo-week-event-block.task { border-left-color: var(--lo-accent); background: var(--lo-accent-light); }
-.lo-week-event-block.matter { border-left-color: var(--lo-accent-2); background: var(--lo-accent-2-light); }
+.lo-week-event-block.lo-matter-c0 { background: #e3edfb; border-left-color: #2c5aa0; }
+.lo-week-event-block.lo-matter-c1 { background: #f0e7fa; border-left-color: #6b3fa0; }
+.lo-week-event-block.lo-matter-c2 { background: #dff5f3; border-left-color: #1f7a6c; }
+.lo-week-event-block.lo-matter-c3 { background: #fbe8f0; border-left-color: #a03d6b; }
+.lo-week-event-block.lo-matter-c4 { background: #e8eafd; border-left-color: #4451b8; }
+.lo-week-event-block.lo-matter-c5 { background: #f5ece0; border-left-color: #8a5a2b; }
+.lo-week-event-block.lo-matter-c6 { background: #e0f4f8; border-left-color: #1a7b8c; }
+.lo-week-event-block.lo-matter-c7 { background: #fdeee0; border-left-color: #b0631f; }
 .lo-week-event-title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; }
 .lo-week-event-delete {
   position: absolute;
@@ -638,6 +645,10 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 }
 .lo-timeblock-source-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
 .lo-timeblock-source-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
   background: var(--lo-accent-light);
   border: 1px solid transparent;
   border-radius: var(--lo-radius-sm);
@@ -649,7 +660,6 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 }
 .lo-timeblock-source-item:hover { border-color: var(--lo-accent); }
 .lo-timeblock-source-item:active { cursor: grabbing; }
-.lo-timeblock-source-matter { background: var(--lo-accent-2-light); }
 
 /* ═══════════════════════════════════════
    HABITS

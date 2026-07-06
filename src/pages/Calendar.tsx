@@ -15,7 +15,9 @@ function getFirstDay(year: number, month: number) {
 /* ─── Week view helpers ─────────────────────────────────────── */
 const HOUR_HEIGHT = 48;
 const SNAP_MINUTES = 15;
-const MAX_MINUTES = 23 * 60 + 45;
+const VIEW_START_HOUR = 8;
+const VIEW_END_HOUR = 22;
+const VIEW_MINUTES = (VIEW_END_HOUR - VIEW_START_HOUR) * 60;
 
 function getWeekStart(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
@@ -38,7 +40,7 @@ function minutesToTime(mins: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 function snapMinutes(mins: number): number {
-  return Math.max(0, Math.min(MAX_MINUTES, Math.round(mins / SNAP_MINUTES) * SNAP_MINUTES));
+  return Math.round(mins / SNAP_MINUTES) * SNAP_MINUTES;
 }
 function formatHour(h: number): string {
   if (h === 0) return "12am";
@@ -47,7 +49,7 @@ function formatHour(h: number): string {
 }
 
 interface DragPayload {
-  kind: "task" | "matter" | "existingEvent";
+  kind: "task" | "existingEvent";
   id: number;
   title?: string;
   matterId?: number | null;
@@ -66,10 +68,6 @@ function WeekView({ weekStart, setWeekStart, today }: {
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekLabel = `${new Date(weekDays[0] + "T00:00:00").toLocaleDateString("en-AU", { month: "short", day: "numeric" })} – ${new Date(weekDays[6] + "T00:00:00").toLocaleDateString("en-AU", { month: "short", day: "numeric", year: "numeric" })}`;
-
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 7 * HOUR_HEIGHT;
-  }, []);
 
   useEffect(() => {
     if (!resizeState) return;
@@ -105,7 +103,9 @@ function WeekView({ weekStart, setWeekStart, today }: {
 
   const computeDropMinutes = (e: React.DragEvent<HTMLDivElement>): number => {
     const rect = e.currentTarget.getBoundingClientRect();
-    return snapMinutes(((e.clientY - rect.top) / HOUR_HEIGHT) * 60);
+    const offsetMinutes = ((e.clientY - rect.top) / HOUR_HEIGHT) * 60;
+    const clamped = Math.max(0, Math.min(VIEW_MINUTES - SNAP_MINUTES, offsetMinutes));
+    return VIEW_START_HOUR * 60 + snapMinutes(clamped);
   };
 
   const handleDrop = (day: string, e: React.DragEvent<HTMLDivElement>) => {
@@ -122,17 +122,12 @@ function WeekView({ weekStart, setWeekStart, today }: {
         title: data.title ?? "", date: day, time, allDay: false, category: "work",
         durationMinutes: 60, taskId: data.id, matterId: data.matterId ?? null,
       });
-    } else if (data.kind === "matter") {
-      addEvent({
-        title: data.title ?? "", date: day, time, allDay: false, category: "matters",
-        durationMinutes: 60, taskId: null, matterId: data.id,
-      });
     }
   };
 
   const openTasks = tasks.filter(t => !t.done);
-  const openMatters = matters.filter(m => m.status !== "closed");
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const matterById = (id: number | null) => id == null ? null : matters.find(m => m.id === id) ?? null;
+  const hours = Array.from({ length: VIEW_END_HOUR - VIEW_START_HOUR }, (_, i) => i + VIEW_START_HOUR);
 
   return (
     <div className="lo-week-layout">
@@ -158,7 +153,7 @@ function WeekView({ weekStart, setWeekStart, today }: {
         </div>
 
         <div className="lo-week-grid-scroll" ref={scrollRef}>
-          <div className="lo-week-grid" style={{ height: 24 * HOUR_HEIGHT }}>
+          <div className="lo-week-grid" style={{ height: (VIEW_END_HOUR - VIEW_START_HOUR) * HOUR_HEIGHT }}>
             <div className="lo-week-hours-col">
               {hours.map(h => (
                 <div key={h} className="lo-week-hour-label" style={{ height: HOUR_HEIGHT }}>{formatHour(h)}</div>
@@ -174,17 +169,24 @@ function WeekView({ weekStart, setWeekStart, today }: {
                 {hours.map(h => <div key={h} className="lo-week-hour-cell" style={{ height: HOUR_HEIGHT }} />)}
                 {events.filter(e => e.date === day && !e.allDay).map(event => {
                   const liveDuration = resizeState?.id === event.id ? resizeState.liveDuration : event.durationMinutes;
+                  const matter = matterById(event.matterId);
+                  const colorClass = event.matterId != null ? `lo-matter-c${event.matterId % 8}` : event.taskId ? "task" : "";
+                  const tooltip = [
+                    event.title,
+                    matter ? `Matter: ${matter.name}` : null,
+                    `${event.time} · ${liveDuration} min`,
+                  ].filter(Boolean).join("\n");
                   return (
                     <div
                       key={event.id}
-                      className={`lo-week-event-block ${event.matterId ? "matter" : event.taskId ? "task" : ""}`}
+                      className={`lo-week-event-block ${colorClass}`}
                       draggable
                       onDragStart={e => e.dataTransfer.setData("application/json", JSON.stringify({ kind: "existingEvent", id: event.id } satisfies DragPayload))}
                       style={{
-                        top: (timeToMinutes(event.time) / 60) * HOUR_HEIGHT,
+                        top: ((timeToMinutes(event.time) / 60) - VIEW_START_HOUR) * HOUR_HEIGHT,
                         height: Math.max(18, (liveDuration / 60) * HOUR_HEIGHT),
                       }}
-                      title={`${event.time} · ${liveDuration}min`}
+                      title={tooltip}
                     >
                       <span className="lo-week-event-title">
                         {event.matterId ? "◇ " : event.taskId ? "✓ " : ""}{event.title}
@@ -205,31 +207,22 @@ function WeekView({ weekStart, setWeekStart, today }: {
         <div className="lo-timeblock-source-label">Tasks</div>
         <div className="lo-timeblock-source-list">
           {openTasks.length === 0 && <p className="lo-matter-empty-actions">No open tasks</p>}
-          {openTasks.map(t => (
-            <div
-              key={t.id}
-              className="lo-timeblock-source-item"
-              draggable
-              onDragStart={e => e.dataTransfer.setData("application/json", JSON.stringify({ kind: "task", id: t.id, title: t.text, matterId: t.matterId } satisfies DragPayload))}
-            >
-              {t.text}
-            </div>
-          ))}
-        </div>
-
-        <div className="lo-timeblock-source-label">Matters</div>
-        <div className="lo-timeblock-source-list">
-          {openMatters.length === 0 && <p className="lo-matter-empty-actions">No open matters</p>}
-          {openMatters.map(m => (
-            <div
-              key={m.id}
-              className="lo-timeblock-source-item lo-timeblock-source-matter"
-              draggable
-              onDragStart={e => e.dataTransfer.setData("application/json", JSON.stringify({ kind: "matter", id: m.id, title: m.name } satisfies DragPayload))}
-            >
-              ◇ {m.name}
-            </div>
-          ))}
+          {openTasks.map(t => {
+            const matter = matterById(t.matterId);
+            return (
+              <div
+                key={t.id}
+                className="lo-timeblock-source-item"
+                draggable
+                onDragStart={e => e.dataTransfer.setData("application/json", JSON.stringify({ kind: "task", id: t.id, title: t.text, matterId: t.matterId } satisfies DragPayload))}
+              >
+                <span>{t.text}</span>
+                {matter && (
+                  <span className={`lo-tag lo-matter-c${matter.id % 8}`}>◇ {matter.name}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
