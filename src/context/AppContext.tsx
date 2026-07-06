@@ -52,6 +52,12 @@ export interface Event {
   durationMinutes: number;
   taskId: number | null;
   matterId: number | null;
+  externalId: string | null;
+}
+
+export interface Settings {
+  outlookIcsUrl: string;
+  lastOutlookSync: string | null;
 }
 
 export interface Habit {
@@ -107,6 +113,9 @@ interface AppContextType {
   addMatterAction: (matterId: number, a: Omit<MatterAction, "id" | "matterId">) => Promise<void>;
   updateMatterAction: (matterId: number, actionId: number, updates: Partial<Omit<MatterAction, "id" | "matterId">>) => Promise<void>;
   deleteMatterAction: (matterId: number, actionId: number) => Promise<void>;
+  settings: Settings;
+  updateSettings: (updates: Partial<Settings>) => Promise<void>;
+  syncOutlook: () => Promise<{ added: number; updated: number; total: number }>;
   today: string;
   loading: boolean;
 }
@@ -139,6 +148,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [journal, setJournal] = useState<JournalEntry[]>([]);
   const [matters, setMatters] = useState<Matter[]>([]);
+  const [settings, setSettings] = useState<Settings>({ outlookIcsUrl: "", lastOutlookSync: null });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -148,12 +158,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       get("/habits"),
       get("/journal"),
       get("/matters"),
-    ]).then(([t, e, h, j, m]) => {
+      get("/settings"),
+    ]).then(([t, e, h, j, m, s]) => {
       setTasks(t);
       setEvents(e);
       setHabits(h);
       setJournal(j);
       setMatters(m);
+      setSettings(s);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
@@ -289,6 +301,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await del(`/matters/${matterId}/actions/${actionId}`);
   };
 
+  const updateSettings = async (updates: Partial<Settings>) => {
+    setSettings(prev => ({ ...prev, ...updates }));
+    await patch("/settings", updates);
+  };
+
+  const syncOutlook = async (): Promise<{ added: number; updated: number; total: number }> => {
+    // Not using the generic post() helper here — it doesn't check response.ok,
+    // so a 400/500 with an { error } body would otherwise look like success.
+    const response = await fetch(api("/outlook/sync"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Sync failed");
+    const [freshEvents, freshSettings] = await Promise.all([get("/events"), get("/settings")]);
+    setEvents(freshEvents);
+    setSettings(freshSettings);
+    return result;
+  };
+
   return (
     <AppContext.Provider value={{
       viewMode, setViewMode,
@@ -299,6 +332,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       journal, addJournalEntry, updateJournalEntry, deleteJournalEntry,
       matters, addMatter, updateMatter, deleteMatter,
       addMatterAction, updateMatterAction, deleteMatterAction,
+      settings, updateSettings, syncOutlook,
       today: todayStr(),
       loading,
     }}>

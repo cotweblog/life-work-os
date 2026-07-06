@@ -120,7 +120,7 @@ function WeekView({ weekStart, setWeekStart, today }: {
     } else if (data.kind === "task") {
       addEvent({
         title: data.title ?? "", date: day, time, allDay: false, category: "work",
-        durationMinutes: 60, taskId: data.id, matterId: data.matterId ?? null,
+        durationMinutes: 60, taskId: data.id, matterId: data.matterId ?? null, externalId: null,
       });
     }
   };
@@ -170,7 +170,10 @@ function WeekView({ weekStart, setWeekStart, today }: {
                 {events.filter(e => e.date === day && !e.allDay).map(event => {
                   const liveDuration = resizeState?.id === event.id ? resizeState.liveDuration : event.durationMinutes;
                   const matter = matterById(event.matterId);
-                  const colorClass = event.matterId != null ? `lo-matter-c${event.matterId % 8}` : event.taskId ? "task" : "";
+                  const colorClass = event.matterId != null ? `lo-matter-c${event.matterId % 8}`
+                    : event.taskId ? "task"
+                    : event.category === "outlook" ? "outlook"
+                    : "";
                   const tooltip = [
                     event.title,
                     matter ? `Matter: ${matter.name}` : null,
@@ -229,6 +232,57 @@ function WeekView({ weekStart, setWeekStart, today }: {
   );
 }
 
+/* ─── Outlook calendar sync ─────────────────────────────────── */
+function OutlookSyncBar() {
+  const { settings, updateSettings, syncOutlook } = useApp();
+  const [url, setUrl] = useState(settings.outlookIcsUrl);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUrl(settings.outlookIcsUrl);
+  }, [settings.outlookIcsUrl]);
+
+  const saveUrlIfChanged = async () => {
+    if (url !== settings.outlookIcsUrl) await updateSettings({ outlookIcsUrl: url });
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setMessage(null);
+    try {
+      await saveUrlIfChanged();
+      const result = await syncOutlook();
+      setMessage(`Synced — ${result.added} added, ${result.updated} updated`);
+    } catch {
+      setMessage("Sync failed — check the calendar link and try again");
+    }
+    setSyncing(false);
+  };
+
+  return (
+    <div className="lo-card lo-outlook-sync">
+      <div className="lo-outlook-sync-row">
+        <input
+          type="text"
+          placeholder="Paste your Outlook calendar (ICS) link…"
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          onBlur={saveUrlIfChanged}
+        />
+        <button className="lo-btn lo-btn-ghost lo-btn-sm" onClick={handleSync} disabled={syncing || !url.trim()}>
+          {syncing ? "Syncing…" : "Sync now"}
+        </button>
+      </div>
+      <div className="lo-outlook-sync-status">
+        {message ?? (settings.lastOutlookSync
+          ? `Last synced ${new Date(settings.lastOutlookSync).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}`
+          : "Not synced yet")}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Calendar page ─────────────────────────────────────────── */
 export default function Calendar() {
   const { events, addEvent, deleteEvent, today } = useApp();
@@ -255,7 +309,7 @@ export default function Calendar() {
 
   const handleAdd = () => {
     if (!form.title.trim()) return;
-    addEvent({ ...form, time: form.allDay ? "" : form.time, durationMinutes: 60, taskId: null, matterId: null });
+    addEvent({ ...form, time: form.allDay ? "" : form.time, durationMinutes: 60, taskId: null, matterId: null, externalId: null });
     setForm({ title: "", date: selected, time: "09:00", allDay: false, category: "work" });
     setShowForm(false);
   };
@@ -273,6 +327,8 @@ export default function Calendar() {
         <h1>Calendar</h1>
         <p>{events.length} events total</p>
       </div>
+
+      <OutlookSyncBar />
 
       <div className="lo-filter-tabs" style={{ marginBottom: 16, width: "fit-content" }}>
         <button className={`lo-filter-tab ${view === "month" ? "active" : ""}`} onClick={() => setView("month")}>Month</button>

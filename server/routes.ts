@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Task, TaskStep, Event, Habit, JournalEntry, Matter, MatterAction } from "./storage.js";
 import { db, persist, allocId } from "./storage.js";
 import { chat } from "./ai.js";
+import { syncOutlookCalendar } from "./outlook.js";
 
 export const router = Router();
 
@@ -231,6 +232,29 @@ router.delete("/matters/:matterId/actions/:actionId", (req, res) => {
   matter.actions = matter.actions.filter(a => a.id !== actionId);
   persist();
   res.json({ ok: true });
+});
+
+// ── Settings ───────────────────────────────────────────
+router.get("/settings", (_req, res) => res.json(db.settings));
+
+router.patch("/settings", (req, res) => {
+  Object.assign(db.settings, req.body);
+  persist();
+  res.json(db.settings);
+});
+
+// ── Outlook calendar sync ───────────────────────────────
+router.post("/outlook/sync", async (_req, res) => {
+  if (!db.settings.outlookIcsUrl.trim()) {
+    return res.status(400).json({ error: "No Outlook calendar URL configured" });
+  }
+  try {
+    const result = await syncOutlookCalendar(db.settings.outlookIcsUrl);
+    res.json(result);
+  } catch (err) {
+    console.error("Outlook sync error:", err);
+    res.status(500).json({ error: err instanceof Error ? err.message : "Sync failed" });
+  }
 });
 
 // ── AI Assistant ───────────────────────────────────────
