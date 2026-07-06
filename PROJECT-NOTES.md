@@ -70,20 +70,35 @@ instructions.
   only tasks (which carry their matter tag along with them).
 - Outlook calendar one-way sync via ICS link (see decision above), including
   recurring-event expansion.
+- Unified Work/Personal workspace (merged in from a Replit iteration): the
+  Sidebar mode toggle and `viewMode`/`WORK_CATEGORIES`/`PERSONAL_CATEGORIES`
+  are gone. `AppContext.tsx` now exposes a single `ALL_TASK_CATEGORIES =
+  ["inbox", "work", "personal", "health", "finance", "matters", "other"]`,
+  and every nav item is always visible.
+- Task inbox + quick capture: the Dashboard has a "Capture a task" field that
+  files new tasks under the `inbox` category, plus an "Tasks to be processed"
+  card to assign a real category later.
+- `Task.urgent` boolean, independent of priority/due date — surfaced as a ⚡
+  toggle on task rows and in the task detail panel.
+- Eisenhower priority matrix on the Dashboard (Do First / Schedule / Delegate
+  / Eliminate), computed from `urgent` OR overdue-or-due-today, crossed with
+  `priority === "high"`.
 
 ## Known limitations / open items
 
-- **Projects** is not a real entity — `Projects.tsx` is just `Tasks.tsx`
-  filtered to `category: "projects"`. Building it out as a proper entity
-  (mirroring Matters) was scoped and started (data model design discussed)
-  then explicitly deprioritized by the user ("don't worry about it for now").
-- **Work/Personal split is being removed.** The user is merging this in
-  Replit into one unified workspace and will hand over the changed files.
-  This currently drives: the Sidebar mode toggle, `viewMode` +
-  `WORK_CATEGORIES`/`PERSONAL_CATEGORIES` in `AppContext.tsx`, and category
-  filtering/dropdowns in `Tasks.tsx`. Expect a merge here, not a straight
-  overwrite, since Replit's copy doesn't know about anything in "Features
-  shipped" above.
+- **Projects** was removed as part of the unified-workspace merge above —
+  it was never a real entity (`Projects.tsx` was just `Tasks.tsx` filtered to
+  `category: "projects"`), and the Replit iteration that unified Work/Personal
+  dropped it from the nav entirely. Building a proper Projects entity
+  (mirroring Matters) was scoped once then explicitly deprioritized by the
+  user ("don't worry about it for now") — revisit only if asked again.
+- Replit's own bundle also included a full calendar rewrite (day/week/month
+  views, `endTime` instead of `durationMinutes`, quick-add/edit modals). This
+  was **not** merged in — our week-view time-blocking (drag-and-drop, resize,
+  Outlook sync, matter tags) is more capable, and adopting `endTime` would
+  have meant reworking the backend Event schema for no net gain. If the user
+  wants day-view or a quick-add-on-slot-click modal, revisit this bundle's
+  `Calendar.tsx` for reference rather than re-deriving from scratch.
 - Outlook sync has no conflict resolution — see decision note above.
 - No automated backups of `server/data/db.json` beyond whatever the Pi's own
   disk/backup setup provides.

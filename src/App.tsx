@@ -3,14 +3,13 @@ import { AppProvider, useApp } from "@/context/AppContext";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
 import Tasks from "@/pages/Tasks";
-import Projects from "@/pages/Projects";
 import Matters from "@/pages/Matters";
 import Calendar from "@/pages/Calendar";
 import Habits from "@/pages/Habits";
 import AIAssistant from "@/pages/AIAssistant";
 import Journal from "@/pages/Journal";
 
-type View = "dashboard" | "tasks" | "projects" | "matters" | "calendar" | "habits" | "ai" | "journal";
+type View = "dashboard" | "tasks" | "matters" | "calendar" | "habits" | "ai" | "journal";
 
 function AppContent() {
   const [activeView, setActiveView] = useState<View>("dashboard");
@@ -20,7 +19,6 @@ function AppContent() {
   const views: Record<View, JSX.Element> = {
     dashboard: <Dashboard setActiveView={navigate} />,
     tasks: <Tasks />,
-    projects: <Projects />,
     matters: <Matters />,
     calendar: <Calendar />,
     habits: <Habits />,

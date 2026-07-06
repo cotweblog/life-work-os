@@ -12,7 +12,7 @@ const notFound = (res: import("express").Response) => res.status(404).json({ err
 router.get("/tasks", (_req, res) => res.json(db.tasks));
 
 router.post("/tasks", (req, res) => {
-  const body = req.body as Pick<Task, "text" | "priority" | "due" | "category" | "matterId">;
+  const body = req.body as Pick<Task, "text" | "priority" | "due" | "category" | "matterId" | "urgent">;
   const task: Task = {
     id: allocId(),
     text: body.text,
@@ -20,6 +20,7 @@ router.post("/tasks", (req, res) => {
     due: body.due ?? "",
     category: body.category,
     matterId: body.matterId ?? null,
+    urgent: body.urgent ?? false,
     done: false,
     completedAt: "",
     notes: "",

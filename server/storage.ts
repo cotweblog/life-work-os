@@ -25,6 +25,7 @@ export interface Task {
   category: string;
   notes: string;
   matterId: number | null;
+  urgent: boolean;
   steps: TaskStep[];
 }
 
@@ -111,6 +112,9 @@ function load(): DB {
   }
   const parsed = JSON.parse(fs.readFileSync(DATA_FILE, "utf8")) as DB;
   // Backfill fields added to the schema after some data was already persisted.
+  for (const task of parsed.tasks) {
+    if (task.urgent === undefined) task.urgent = false;
+  }
   for (const habit of parsed.habits) {
     if (!habit.notes) habit.notes = {};
   }

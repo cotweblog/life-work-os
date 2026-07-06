@@ -39,6 +39,7 @@ export interface Task {
   category: string;
   notes: string;
   matterId: number | null;
+  urgent: boolean;
   steps: TaskStep[];
 }
 
@@ -77,15 +78,11 @@ export interface JournalEntry {
   mood: string;
 }
 
-export const WORK_CATEGORIES = ["work", "projects", "matters"] as const;
-export const PERSONAL_CATEGORIES = ["personal", "health", "finance", "other"] as const;
-export type ViewMode = "work" | "personal";
+export const ALL_TASK_CATEGORIES = ["inbox", "work", "personal", "health", "finance", "matters", "other"] as const;
 
 interface AppContextType {
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
   tasks: Task[];
-  addTask: (task: Omit<Task, "id" | "done" | "notes" | "steps" | "completedAt">) => Promise<void>;
+  addTask: (task: Omit<Task, "id" | "done" | "notes" | "steps" | "completedAt" | "urgent"> & { urgent?: boolean }) => Promise<void>;
   updateTask: (id: number, updates: Partial<Omit<Task, "id" | "steps">>) => Promise<void>;
   toggleTask: (id: number) => Promise<void>;
   deleteTask: (id: number) => Promise<void>;
@@ -135,14 +132,6 @@ const del = (path: string) =>
   fetch(api(path), { method: "DELETE" }).then(r => r.json());
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [viewMode, setViewModeState] = useState<ViewMode>(() =>
-    (localStorage.getItem("lo-view-mode") as ViewMode) || "work"
-  );
-  const setViewMode = (mode: ViewMode) => {
-    setViewModeState(mode);
-    localStorage.setItem("lo-view-mode", mode);
-  };
-
   const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -169,8 +158,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  const addTask = async (task: Omit<Task, "id" | "done" | "notes" | "steps" | "completedAt">) => {
-    const created = await post("/tasks", task);
+  const addTask = async (task: Omit<Task, "id" | "done" | "notes" | "steps" | "completedAt" | "urgent"> & { urgent?: boolean }) => {
+    const created = await post("/tasks", { ...task, urgent: task.urgent ?? false });
     setTasks(prev => [...prev, created]);
   };
 
@@ -324,7 +313,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   return (
     <AppContext.Provider value={{
-      viewMode, setViewMode,
       tasks, addTask, updateTask, toggleTask, deleteTask, linkTaskToMatter,
       addStep, updateStep, deleteStep,
       events, addEvent, updateEvent, deleteEvent,

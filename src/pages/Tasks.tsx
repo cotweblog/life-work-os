@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useApp, WORK_CATEGORIES, PERSONAL_CATEGORIES } from "@/context/AppContext";
+import { useApp, ALL_TASK_CATEGORIES } from "@/context/AppContext";
 import type { Task } from "@/context/AppContext";
 
-const CATEGORIES = ["work", "personal", "health", "finance", "projects", "matters", "other"];
+const CATEGORIES = [...ALL_TASK_CATEGORIES];
 const PRIORITIES = ["high", "medium", "low"] as const;
 
 /* ─── Import panel ─────────────────────────────────────────── */
@@ -176,6 +176,11 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matter
                   {p}
                 </button>
               ))}
+              <button
+                className={`lo-urgent-btn${task.urgent ? " on" : ""}`}
+                title={task.urgent ? "Unmark urgent" : "Mark urgent"}
+                onClick={() => onUpdate(task.id, { urgent: !task.urgent })}
+              >⚡</button>
             </div>
           </div>
 
@@ -304,11 +309,9 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matter
 
 /* ─── Main Tasks page ──────────────────────────────────────── */
 export default function Tasks({ categoryFilter }: { categoryFilter?: string } = {}) {
-  const { viewMode, tasks, matters, addTask, updateTask, toggleTask, deleteTask, today } = useApp();
-  const isWork = viewMode === "work";
-  const modeCategories: readonly string[] = isWork ? WORK_CATEGORIES : PERSONAL_CATEGORIES;
-  const formCategories = categoryFilter ? [categoryFilter] : modeCategories;
-  const defaultCategory = categoryFilter ?? (isWork ? "work" : "personal");
+  const { tasks, matters, addTask, updateTask, toggleTask, deleteTask, today } = useApp();
+  const formCategories = categoryFilter ? [categoryFilter] : CATEGORIES;
+  const defaultCategory = categoryFilter ?? "inbox";
 
   const [filter, setFilter] = useState("all");
   const [showForm, setShowForm] = useState(false);
@@ -318,14 +321,13 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
 
   const base = categoryFilter
     ? tasks.filter(t => t.category === categoryFilter)
-    : tasks.filter(t => modeCategories.includes(t.category));
+    : tasks;
 
   const filtered = base
     .filter(t => {
-      if (filter === "today") return t.due === today;
+      if (filter === "today") return t.due === today && !t.done;
       if (filter === "done") return t.done;
       if (filter === "open") return !t.done;
-      if (filter === "projects") return t.category === "projects";
       return true;
     })
     .sort((a, b) => {
@@ -370,18 +372,13 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
       )}
 
       <div className="lo-page-header">
-        <h1>{categoryFilter === "projects" ? "Projects" : "Tasks"}</h1>
+        <h1>Tasks</h1>
         <p>{base.filter(t => !t.done).length} open · {base.filter(t => t.done).length} done</p>
       </div>
 
       <div className="lo-tasks-toolbar">
         <div className="lo-filter-tabs">
-          {(categoryFilter
-            ? ["all", "today", "open", "done"]
-            : isWork
-              ? ["all", "today", "open", "projects", "done"]
-              : ["all", "today", "open", "done"]
-          ).map(f => (
+          {(["all", "today", "open", "done"]).map(f => (
             <button key={f} className={`lo-filter-tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
               {f}
             </button>
@@ -412,7 +409,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
             </select>
             <input type="date" value={form.due} onChange={e => setForm(p => ({ ...p, due: e.target.value }))} />
           </div>
-          {isWork && matters.length > 0 && (
+          {matters.length > 0 && (
             <div className="lo-form-row">
               <select
                 value={form.matterId ?? ""}
@@ -465,6 +462,11 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
                   {task.notes && <span className="lo-task-notes-dot" title="Has notes">✦</span>}
                 </div>
               </div>
+              <button
+                className={`lo-urgent-btn${task.urgent ? " on" : ""}`}
+                title={task.urgent ? "Unmark urgent" : "Mark urgent"}
+                onClick={e => { e.stopPropagation(); updateTask(task.id, { urgent: !task.urgent }); }}
+              >⚡</button>
               <span className="lo-task-chevron">›</span>
             </div>
           );
