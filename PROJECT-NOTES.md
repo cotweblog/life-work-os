@@ -15,7 +15,7 @@ instructions.
 - **Backend**: Express (`server/`), added from scratch — the original Replit
   export only ever included the frontend. Single-file JSON storage
   (`server/data/db.json`), no database. Auto-incrementing IDs, one flat DB
-  object holding tasks/events/habits/journal/matters/settings.
+  object holding tasks/events/habits/journal/matters.
 - **Auth**: HTTP Basic Auth (`server/auth.ts`), gated by `APP_PASSWORD` env var.
   No-op when unset (local dev). Includes IP-based rate limiting (8 wrong
   attempts / 15 min lockout) that only counts requests with an actual
@@ -36,11 +36,7 @@ instructions.
 ## Key decisions (the "why", not derivable from the code)
 
 - **Fonts self-hosted** (`public/fonts/`) instead of Google Fonts CDN — removes
-  the only third-party call the app made that wasn't Railway/Anthropic/Outlook.
-- **Outlook sync is one-way, via ICS subscription link**, not Microsoft Graph
-  OAuth — avoids Azure app registration entirely at the cost of no push-back
-  to Outlook and overwrite-on-resync semantics (a manual edit here gets
-  clobbered by the next sync if Outlook still has the old value).
+  the only third-party call the app made that wasn't Railway/Anthropic.
 - **AI Assistant** calls Anthropic's API server-side only; the assistant's
   context (open tasks, today's events, habit status) is rebuilt from live data
   on every request rather than stored — chat history itself is never
@@ -64,12 +60,15 @@ instructions.
   by matter id) instead of one flat gray.
 - Habit log: per-day free-text notes on top of the existing done/not-done
   tracker, editable from the habit's history panel.
-- Calendar week view with drag-and-drop time-blocking: drag an open task onto
-  an hourly grid (8am–10pm) to create a resizable, linked event block; existing
-  blocks can be dragged to reposition. Matters are *not* a direct drag source —
-  only tasks (which carry their matter tag along with them).
-- Outlook calendar one-way sync via ICS link (see decision above), including
-  recurring-event expansion.
+- Calendar rewritten (`src/pages/Calendar.tsx`) to a full Day/Week/Month view
+  (adopted from a later Replit iteration, `Event.endTime` replacing the
+  earlier `durationMinutes` field), with our own drag-and-drop task scheduling
+  layered on top: drag an open task from the side panel onto the 8am–9pm time
+  grid to create a resizable, linked event block (carries the task's matter
+  tag/color); existing blocks can be dragged to reposition or resized from the
+  bottom edge; clicking an empty slot opens a quick-add modal, clicking an
+  event opens a full edit modal; hovering an event shows a tooltip with time/
+  category/matter. Matters are *not* a direct drag source — only tasks.
 - Unified Work/Personal workspace (merged in from a Replit iteration): the
   Sidebar mode toggle and `viewMode`/`WORK_CATEGORIES`/`PERSONAL_CATEGORIES`
   are gone. `AppContext.tsx` now exposes a single `ALL_TASK_CATEGORIES =
@@ -92,13 +91,12 @@ instructions.
   dropped it from the nav entirely. Building a proper Projects entity
   (mirroring Matters) was scoped once then explicitly deprioritized by the
   user ("don't worry about it for now") — revisit only if asked again.
-- Replit's own bundle also included a full calendar rewrite (day/week/month
-  views, `endTime` instead of `durationMinutes`, quick-add/edit modals). This
-  was **not** merged in — our week-view time-blocking (drag-and-drop, resize,
-  Outlook sync, matter tags) is more capable, and adopting `endTime` would
-  have meant reworking the backend Event schema for no net gain. If the user
-  wants day-view or a quick-add-on-slot-click modal, revisit this bundle's
-  `Calendar.tsx` for reference rather than re-deriving from scratch.
-- Outlook sync has no conflict resolution — see decision note above.
+- **Outlook calendar sync was removed** (previously a one-way ICS-link sync,
+  `server/outlook.ts` + `Settings`/`syncOutlook` in `AppContext.tsx`) when the
+  calendar was rewritten to adopt Replit's Day/Week/Month design — removed by
+  explicit request rather than merged forward. If it's wanted again, it needs
+  to be re-added on top of the new `endTime`-based Event schema (the old
+  `node-ical`-based sync code assumed `durationMinutes`, so it can't just be
+  restored as-is).
 - No automated backups of `server/data/db.json` beyond whatever the Pi's own
   disk/backup setup provides.

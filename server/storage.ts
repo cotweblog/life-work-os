@@ -34,12 +34,11 @@ export interface Event {
   title: string;
   date: string;
   time: string;
+  endTime: string;
   allDay: boolean;
   category: string;
-  durationMinutes: number;
   taskId: number | null;
   matterId: number | null;
-  externalId: string | null;
 }
 
 export interface Habit {
@@ -80,27 +79,17 @@ export interface Matter {
   actions: MatterAction[];
 }
 
-export interface Settings {
-  outlookIcsUrl: string;
-  lastOutlookSync: string | null;
-}
-
 interface DB {
   tasks: Task[];
   events: Event[];
   habits: Habit[];
   journal: JournalEntry[];
   matters: Matter[];
-  settings: Settings;
   nextId: number;
 }
 
-function defaultSettings(): Settings {
-  return { outlookIcsUrl: "", lastOutlookSync: null };
-}
-
 function defaultDb(): DB {
-  return { tasks: [], events: [], habits: [], journal: [], matters: [], settings: defaultSettings(), nextId: 1 };
+  return { tasks: [], events: [], habits: [], journal: [], matters: [], nextId: 1 };
 }
 
 function load(): DB {
@@ -119,12 +108,11 @@ function load(): DB {
     if (!habit.notes) habit.notes = {};
   }
   for (const event of parsed.events) {
-    if (event.durationMinutes == null) event.durationMinutes = 60;
+    if (event.endTime === undefined) event.endTime = "";
     if (event.taskId === undefined) event.taskId = null;
     if (event.matterId === undefined) event.matterId = null;
-    if (event.externalId === undefined) event.externalId = null;
   }
-  if (!parsed.settings) parsed.settings = defaultSettings();
+  delete (parsed as { settings?: unknown }).settings;
   return parsed;
 }
 

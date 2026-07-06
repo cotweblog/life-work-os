@@ -1,52 +1,18 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
-import type { Event } from "@/context/AppContext";
+import type { Event, Task, Matter } from "@/context/AppContext";
 import { toLocalDateStr } from "@/lib/utils";
 
-const CATEGORIES = ["work", "personal", "health", "social", "other"];
+const EVENT_CATEGORIES = ["work", "personal", "health", "social", "other"];
+const KNOWN_EV_COLORS = new Set(["work", "personal", "health", "social"]);
 
-function getDaysInMonth(year: number, month: number) {
-  return new Date(year, month + 1, 0).getDate();
-}
-function getFirstDay(year: number, month: number) {
-  return new Date(year, month, 1).getDay();
-}
+const HOUR_H = 56;
+const START_H = 8;
+const END_H = 22;
+const HOURS = Array.from({ length: END_H - START_H }, (_, i) => i + START_H);
+const SNAP_MINS = 15;
 
-/* ─── Week view helpers ─────────────────────────────────────── */
-const HOUR_HEIGHT = 48;
-const SNAP_MINUTES = 15;
-const VIEW_START_HOUR = 8;
-const VIEW_END_HOUR = 22;
-const VIEW_MINUTES = (VIEW_END_HOUR - VIEW_START_HOUR) * 60;
-
-function getWeekStart(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() - d.getDay());
-  return toLocalDateStr(d);
-}
-function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() + n);
-  return toLocalDateStr(d);
-}
-function timeToMinutes(time: string): number {
-  if (!time) return 0;
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-function minutesToTime(mins: number): string {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-function snapMinutes(mins: number): number {
-  return Math.round(mins / SNAP_MINUTES) * SNAP_MINUTES;
-}
-function formatHour(h: number): string {
-  if (h === 0) return "12am";
-  if (h === 12) return "12pm";
-  return h < 12 ? `${h}am` : `${h - 12}pm`;
-}
+type CalView = "day" | "week" | "month";
 
 interface DragPayload {
   kind: "task" | "existingEvent";
@@ -55,382 +21,574 @@ interface DragPayload {
   matterId?: number | null;
 }
 
-function WeekView({ weekStart, setWeekStart, today }: {
-  weekStart: string;
-  setWeekStart: (d: string) => void;
-  today: string;
-}) {
-  const { events, tasks, matters, addEvent, updateEvent, deleteEvent } = useApp();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [resizeState, setResizeState] = useState<{ id: number; startY: number; startDuration: number; liveDuration: number } | null>(null);
-  const resizeStateRef = useRef(resizeState);
-  resizeStateRef.current = resizeState;
+function fmtHour(h: number): string {
+  if (h === 0) return "12am";
+  if (h === 12) return "12pm";
+  return h < 12 ? `${h}am` : `${h - 12}pm`;
+}
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const weekLabel = `${new Date(weekDays[0] + "T00:00:00").toLocaleDateString("en-AU", { month: "short", day: "numeric" })} – ${new Date(weekDays[6] + "T00:00:00").toLocaleDateString("en-AU", { month: "short", day: "numeric", year: "numeric" })}`;
+function getWeekDates(anchor: string): string[] {
+  const d = new Date(anchor + "T00:00:00");
+  const dow = d.getDay();
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return Array.from({ length: 7 }, (_, i) => {
+    const dd = new Date(mon);
+    dd.setDate(mon.getDate() + i);
+    return toLocalDateStr(dd);
+  });
+}
 
-  useEffect(() => {
-    if (!resizeState) return;
-    const { startY, startDuration } = resizeState;
-    const onMove = (e: MouseEvent) => {
-      const deltaMinutes = ((e.clientY - startY) / HOUR_HEIGHT) * 60;
-      const liveDuration = Math.max(15, snapMinutes(startDuration + deltaMinutes));
-      setResizeState(s => s ? { ...s, liveDuration } : s);
-    };
-    const onUp = () => {
-      // Read via ref rather than the setResizeState updater — calling another
-      // component's setter (updateEvent -> AppProvider's setEvents) from
-      // inside this component's state updater triggers React's "Cannot
-      // update a component while rendering a different component" warning.
-      const current = resizeStateRef.current;
-      if (current) updateEvent(current.id, { durationMinutes: current.liveDuration });
-      setResizeState(null);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resizeState?.id, resizeState?.startY, resizeState?.startDuration]);
+function getDaysInMonth(y: number, m: number) { return new Date(y, m + 1, 0).getDate(); }
+function getFirstDay(y: number, m: number) {
+  const d = new Date(y, m, 1).getDay();
+  return d === 0 ? 6 : d - 1;
+}
 
-  const startResize = (e: React.MouseEvent, event: Event) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setResizeState({ id: event.id, startY: e.clientY, startDuration: event.durationMinutes, liveDuration: event.durationMinutes });
-  };
+function getEndTime(ev: Event): string {
+  if (ev.endTime) return ev.endTime;
+  const [h, m] = ev.time.split(":").map(Number);
+  const end = h * 60 + m + 60;
+  return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+}
 
-  const computeDropMinutes = (e: React.DragEvent<HTMLDivElement>): number => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const offsetMinutes = ((e.clientY - rect.top) / HOUR_HEIGHT) * 60;
-    const clamped = Math.max(0, Math.min(VIEW_MINUTES - SNAP_MINUTES, offsetMinutes));
-    return VIEW_START_HOUR * 60 + snapMinutes(clamped);
-  };
+function getEventHeight(ev: Event): number {
+  const [sh, sm] = ev.time.split(":").map(Number);
+  const endT = getEndTime(ev);
+  const [eh, em] = endT.split(":").map(Number);
+  const dur = Math.max(SNAP_MINS, (eh * 60 + em) - (sh * 60 + sm));
+  return (dur / 60) * HOUR_H;
+}
 
-  const handleDrop = (day: string, e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const raw = e.dataTransfer.getData("application/json");
-    if (!raw) return;
-    const data: DragPayload = JSON.parse(raw);
-    const time = minutesToTime(computeDropMinutes(e));
+function tgevColor(ev: Event): string {
+  if (ev.matterId != null) return `lo-tgev-c${ev.matterId % 8}`;
+  return KNOWN_EV_COLORS.has(ev.category) ? `lo-tgev-${ev.category}` : "lo-tgev-other";
+}
+function mevColor(ev: Event): string {
+  if (ev.allDay) return "lo-mev-allday";
+  if (ev.matterId != null) return `lo-mev-c${ev.matterId % 8}`;
+  return KNOWN_EV_COLORS.has(ev.category) ? `lo-mev-${ev.category}` : "lo-mev-other";
+}
 
-    if (data.kind === "existingEvent") {
-      updateEvent(data.id, { date: day, time });
-    } else if (data.kind === "task") {
-      addEvent({
-        title: data.title ?? "", date: day, time, allDay: false, category: "work",
-        durationMinutes: 60, taskId: data.id, matterId: data.matterId ?? null, externalId: null,
-      });
-    }
-  };
-
-  const openTasks = tasks.filter(t => !t.done);
+/* ─── Task side panel (drag source) ───────────────────────── */
+function TaskPanel({ tasks, matters }: { tasks: Task[]; matters: Matter[] }) {
+  const open = tasks.filter(t => !t.done);
   const matterById = (id: number | null) => id == null ? null : matters.find(m => m.id === id) ?? null;
-  const hours = Array.from({ length: VIEW_END_HOUR - VIEW_START_HOUR }, (_, i) => i + VIEW_START_HOUR);
+  return (
+    <div className="lo-cal-task-panel">
+      <div className="lo-cal-task-panel-hd">Drag to schedule</div>
+      {open.length === 0 && <p className="lo-cal-task-panel-empty">No open tasks</p>}
+      {open.map(t => {
+        const matter = matterById(t.matterId);
+        return (
+          <div
+            key={t.id}
+            draggable
+            className="lo-cal-task-item"
+            onDragStart={e => {
+              e.dataTransfer.setData("application/json", JSON.stringify({ kind: "task", id: t.id, title: t.text, matterId: t.matterId } satisfies DragPayload));
+              e.dataTransfer.effectAllowed = "copy";
+            }}
+          >
+            <span className={`lo-cal-task-dot lo-cal-dot-${t.priority}`} />
+            <div className="lo-cal-task-label">
+              {t.text}
+              {matter && <span className={`lo-tag lo-cal-task-matter lo-matter-c${matter.id % 8}`}>◇ {matter.name}</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── Event hover tooltip ──────────────────────────────────── */
+function EvTooltip({ ev, matterName, rect }: { ev: Event; matterName: string | null; rect: DOMRect }) {
+  const endT = getEndTime(ev);
+  return (
+    <div className="lo-ev-tooltip" style={{ position: "fixed", top: rect.top, left: rect.right + 8, zIndex: 200 }}>
+      <div className="lo-ev-tt-title">{ev.title}</div>
+      <div className="lo-ev-tt-row">
+        📅 {new Date(ev.date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
+      </div>
+      {!ev.allDay && ev.time && <div className="lo-ev-tt-row">⏰ {ev.time} – {endT}</div>}
+      {ev.allDay && <div className="lo-ev-tt-row">⏰ All day</div>}
+      <div className="lo-ev-tt-row">🏷 {ev.category}</div>
+      {matterName && <div className="lo-ev-tt-row">◇ {matterName}</div>}
+    </div>
+  );
+}
+
+/* ─── Event edit modal ────────────────────────────────────── */
+function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
+  ev: Event;
+  matterName: string | null;
+  onSave: (id: number, updates: Partial<Omit<Event, "id">>) => void;
+  onDelete: (id: number) => void;
+  onClose: () => void;
+}) {
+  const defaultEnd = getEndTime(ev);
+  const [form, setForm] = useState({
+    title: ev.title, date: ev.date, time: ev.time || "09:00", endTime: ev.endTime || defaultEnd,
+    category: ev.category, allDay: ev.allDay,
+  });
+
+  const handleSave = () => {
+    if (!form.title.trim()) return;
+    onSave(ev.id, {
+      title: form.title.trim(), date: form.date,
+      time: form.allDay ? "" : form.time, endTime: form.allDay ? "" : form.endTime,
+      category: form.category, allDay: form.allDay,
+    });
+    onClose();
+  };
 
   return (
-    <div className="lo-week-layout">
-      <div className="lo-card lo-week-card">
-        <div className="lo-cal-header">
-          <button className="lo-icon-btn" onClick={() => setWeekStart(addDays(weekStart, -7))}>‹</button>
-          <span className="lo-month-label">{weekLabel}</span>
-          <button className="lo-icon-btn" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
-          <button className="lo-btn lo-btn-ghost lo-btn-sm" style={{ marginLeft: 8 }} onClick={() => setWeekStart(getWeekStart(today))}>This week</button>
+    <div className="lo-qa-overlay" onClick={onClose}>
+      <div className="lo-qa-modal lo-card" onClick={e => e.stopPropagation()}>
+        <div className="lo-qa-time">Edit event</div>
+        <input
+          autoFocus className="lo-qa-input" value={form.title}
+          onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+          onKeyDown={e => e.key === "Enter" && handleSave()}
+        />
+        {(ev.matterId != null || ev.taskId != null) && (
+          <div style={{ marginTop: 8 }}>
+            {matterName
+              ? <span className={`lo-tag lo-matter-c${ev.matterId! % 8}`}>◇ {matterName}</span>
+              : ev.taskId != null && <span className="lo-tag lo-tag-gray">✓ linked task</span>}
+          </div>
+        )}
+        <div className="lo-form-row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+          <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+          {!form.allDay && <>
+            <input type="time" value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))} />
+            <input type="time" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
+          </>}
+          <label className="lo-allday-label">
+            <input type="checkbox" checked={form.allDay} onChange={e => setForm(p => ({ ...p, allDay: e.target.checked }))} /> All day
+          </label>
+          <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
+            {EVENT_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="lo-form-actions" style={{ marginTop: 14 }}>
+          <button className="lo-btn lo-btn-primary" onClick={handleSave} disabled={!form.title.trim()}>Update</button>
+          <button className="lo-btn lo-btn-ghost lo-btn-danger" onClick={() => { onDelete(ev.id); onClose(); }}>Delete</button>
+          <button className="lo-btn lo-btn-ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Quick add modal (click empty slot) ──────────────────── */
+function QuickAddModal({ slot, onAdd, onClose }: {
+  slot: { date: string; hour: number };
+  onAdd: (title: string, category: string, allDay: boolean) => void;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("work");
+  const [allDay, setAllDay] = useState(false);
+  const handleAdd = () => {
+    if (!title.trim()) return;
+    onAdd(title.trim(), category, allDay);
+    onClose();
+  };
+  return (
+    <div className="lo-qa-overlay" onClick={onClose}>
+      <div className="lo-qa-modal lo-card" onClick={e => e.stopPropagation()}>
+        <div className="lo-qa-time">
+          {new Date(slot.date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", month: "short", day: "numeric" })} · {fmtHour(slot.hour)}
+        </div>
+        <input autoFocus className="lo-qa-input" placeholder="Event title…" value={title}
+          onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAdd()} />
+        <div className="lo-form-row" style={{ marginTop: 8 }}>
+          <label className="lo-allday-label">
+            <input type="checkbox" checked={allDay} onChange={e => setAllDay(e.target.checked)} /> All day
+          </label>
+          <select value={category} onChange={e => setCategory(e.target.value)}>
+            {EVENT_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="lo-form-actions" style={{ marginTop: 12 }}>
+          <button className="lo-btn lo-btn-primary" onClick={handleAdd} disabled={!title.trim()}>Add</button>
+          <button className="lo-btn lo-btn-ghost" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Time grid (day + week) ──────────────────────────────── */
+function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEventResize, onSlotClick, onDelete, onEventEdit }: {
+  dates: string[]; events: Event[]; matters: Matter[]; today: string;
+  onTaskDrop: (date: string, hour: number, data: DragPayload) => void;
+  onEventMove: (evId: number, date: string, hour: number) => void;
+  onEventResize: (evId: number, newEndTime: string) => void;
+  onSlotClick: (date: string, hour: number) => void;
+  onDelete: (id: number) => void;
+  onEventEdit: (ev: Event) => void;
+}) {
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{ ev: Event; rect: DOMRect } | null>(null);
+  const [resizingId, setResizingId] = useState<number | null>(null);
+  const [resizingHeight, setResizingHeight] = useState(0);
+
+  const resizeRef = useRef<{ evId: number; startY: number; origHeight: number; startTime: string } | null>(null);
+  const resizingHeightRef = useRef(0);
+  const onEventResizeRef = useRef(onEventResize);
+  useEffect(() => { onEventResizeRef.current = onEventResize; }, [onEventResize]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizeRef.current) return;
+      const delta = e.clientY - resizeRef.current.startY;
+      const raw = resizeRef.current.origHeight + delta;
+      const minH = HOUR_H * SNAP_MINS / 60;
+      const snap = HOUR_H * SNAP_MINS / 60;
+      const snapped = Math.max(minH, Math.round(raw / snap) * snap);
+      resizingHeightRef.current = snapped;
+      setResizingHeight(snapped);
+    };
+    const onUp = () => {
+      // Read via ref rather than the setResizingHeight updater — calling
+      // updateEvent (AppProvider's setter) from inside this component's own
+      // state updater triggers React's "Cannot update a component while
+      // rendering a different component" warning.
+      if (!resizeRef.current) return;
+      const { evId, startTime } = resizeRef.current;
+      const [sh, sm] = startTime.split(":").map(Number);
+      const startMins = sh * 60 + sm;
+      const durationMins = Math.max(SNAP_MINS, Math.round(resizingHeightRef.current / HOUR_H * 60 / SNAP_MINS) * SNAP_MINS);
+      const endMins = startMins + durationMins;
+      const newEnd = `${String(Math.floor(endMins / 60)).padStart(2, "0")}:${String(endMins % 60).padStart(2, "0")}`;
+      onEventResizeRef.current(evId, newEnd);
+      resizeRef.current = null;
+      resizingHeightRef.current = 0;
+      setResizingId(null);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  const startResize = (e: React.MouseEvent, ev: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const curH = getEventHeight(ev);
+    resizeRef.current = { evId: ev.id, startY: e.clientY, origHeight: curH, startTime: ev.time };
+    resizingHeightRef.current = curH;
+    setResizingId(ev.id);
+    setResizingHeight(curH);
+    setTooltip(null);
+  };
+
+  const matterById = (id: number | null) => id == null ? null : matters.find(m => m.id === id) ?? null;
+  const timedFor = (date: string) => events.filter(e => e.date === date && !e.allDay).sort((a, b) => a.time.localeCompare(b.time));
+  const allDayFor = (date: string) => events.filter(e => e.date === date && e.allDay);
+
+  return (
+    <>
+      <div className="lo-tgrid">
+        <div className="lo-tgrid-head">
+          <div className="lo-tgrid-corner" />
+          {dates.map(d => (
+            <div key={d} className={`lo-tgrid-col-hd ${d === today ? "today" : ""}`}>
+              <span className="lo-tgrid-dow">{new Date(d + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short" })}</span>
+              <span className="lo-tgrid-daynum">{new Date(d + "T00:00:00").getDate()}</span>
+            </div>
+          ))}
         </div>
 
-        <div className="lo-week-header-row">
-          <div className="lo-week-hours-col-spacer" />
-          {weekDays.map(day => (
-            <div key={day} className={`lo-week-day-header ${day === today ? "today" : ""}`}>
-              <div className="lo-week-day-name">{new Date(day + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short" })}</div>
-              <div className="lo-week-day-num">{new Date(day + "T00:00:00").getDate()}</div>
-              {events.filter(e => e.date === day && e.allDay).map(e => (
-                <div key={e.id} className="lo-tag lo-tag-gray lo-week-allday-tag">{e.title}</div>
+        <div className="lo-tgrid-allday-row">
+          <div className="lo-tgrid-corner lo-tgrid-corner-sm">all day</div>
+          {dates.map(d => (
+            <div key={d} className="lo-tgrid-allday-col">
+              {allDayFor(d).map(ev => (
+                <div key={ev.id} className="lo-tgrid-allday-chip" onClick={() => onEventEdit(ev)}>
+                  <span>{ev.title}</span>
+                  <button onClick={e => { e.stopPropagation(); onDelete(ev.id); }}>×</button>
+                </div>
               ))}
             </div>
           ))}
         </div>
 
-        <div className="lo-week-grid-scroll" ref={scrollRef}>
-          <div className="lo-week-grid" style={{ height: (VIEW_END_HOUR - VIEW_START_HOUR) * HOUR_HEIGHT }}>
-            <div className="lo-week-hours-col">
-              {hours.map(h => (
-                <div key={h} className="lo-week-hour-label" style={{ height: HOUR_HEIGHT }}>{formatHour(h)}</div>
+        <div className="lo-tgrid-scroll">
+          <div className="lo-tgrid-inner" style={{ height: HOURS.length * HOUR_H }}>
+            <div className="lo-tgrid-axis">
+              {HOURS.map(h => (
+                <div key={h} className="lo-tgrid-hlbl" style={{ top: (h - START_H) * HOUR_H }}>{fmtHour(h)}</div>
               ))}
             </div>
-            {weekDays.map(day => (
-              <div
-                key={day}
-                className={`lo-week-day-col ${day === today ? "today" : ""}`}
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => handleDrop(day, e)}
-              >
-                {hours.map(h => <div key={h} className="lo-week-hour-cell" style={{ height: HOUR_HEIGHT }} />)}
-                {events.filter(e => e.date === day && !e.allDay).map(event => {
-                  const liveDuration = resizeState?.id === event.id ? resizeState.liveDuration : event.durationMinutes;
-                  const matter = matterById(event.matterId);
-                  const colorClass = event.matterId != null ? `lo-matter-c${event.matterId % 8}`
-                    : event.taskId ? "task"
-                    : event.category === "outlook" ? "outlook"
-                    : "";
-                  const tooltip = [
-                    event.title,
-                    matter ? `Matter: ${matter.name}` : null,
-                    `${event.time} · ${liveDuration} min`,
-                  ].filter(Boolean).join("\n");
-                  return (
-                    <div
-                      key={event.id}
-                      className={`lo-week-event-block ${colorClass}`}
-                      draggable
-                      onDragStart={e => e.dataTransfer.setData("application/json", JSON.stringify({ kind: "existingEvent", id: event.id } satisfies DragPayload))}
-                      style={{
-                        top: ((timeToMinutes(event.time) / 60) - VIEW_START_HOUR) * HOUR_HEIGHT,
-                        height: Math.max(18, (liveDuration / 60) * HOUR_HEIGHT),
-                      }}
-                      title={tooltip}
-                    >
-                      <span className="lo-week-event-title">
-                        {event.matterId ? "◇ " : event.taskId ? "✓ " : ""}{event.title}
-                      </span>
-                      <button className="lo-week-event-delete" onClick={() => deleteEvent(event.id)}>×</button>
-                      <div className="lo-week-event-resize-handle" draggable={false} onMouseDown={e => startResize(e, event)} />
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+
+            <div className="lo-tgrid-cols" style={{ gridTemplateColumns: `repeat(${dates.length}, 1fr)` }}>
+              {dates.map(date => (
+                <div key={date} className={`lo-tgrid-daycol ${date === today ? "today" : ""}`}>
+                  {HOURS.map(h => {
+                    const key = `${date}-${h}`;
+                    return (
+                      <div
+                        key={h}
+                        className={`lo-tgrid-slot ${dragOver === key ? "over" : ""}`}
+                        style={{ top: (h - START_H) * HOUR_H, height: HOUR_H }}
+                        onDragOver={e => { e.preventDefault(); setDragOver(key); }}
+                        onDragLeave={() => setDragOver(p => p === key ? null : p)}
+                        onDrop={e => {
+                          e.preventDefault();
+                          setDragOver(null);
+                          const raw = e.dataTransfer.getData("application/json");
+                          if (!raw) return;
+                          const data: DragPayload = JSON.parse(raw);
+                          if (data.kind === "existingEvent") onEventMove(data.id, date, h);
+                          else onTaskDrop(date, h, data);
+                        }}
+                        onClick={() => onSlotClick(date, h)}
+                      />
+                    );
+                  })}
+
+                  {HOURS.map(h => (
+                    <div key={h} className="lo-tgrid-hline" style={{ top: (h - START_H) * HOUR_H }} />
+                  ))}
+
+                  {timedFor(date).map(ev => {
+                    const [hh, mm] = ev.time.split(":").map(Number);
+                    const top = ((hh - START_H) + (mm || 0) / 60) * HOUR_H;
+                    const h = resizingId === ev.id ? resizingHeight : getEventHeight(ev);
+                    const matter = matterById(ev.matterId);
+                    return (
+                      <div
+                        key={ev.id}
+                        draggable={resizingId !== ev.id}
+                        className={`lo-tgev ${tgevColor(ev)} ${resizingId === ev.id ? "resizing" : ""}`}
+                        style={{ top, height: h - 4 }}
+                        onDragStart={e => {
+                          if (resizeRef.current) { e.preventDefault(); return; }
+                          e.stopPropagation();
+                          e.dataTransfer.setData("application/json", JSON.stringify({ kind: "existingEvent", id: ev.id } satisfies DragPayload));
+                          e.dataTransfer.effectAllowed = "move";
+                          setTooltip(null);
+                        }}
+                        onMouseEnter={e => {
+                          if (!resizeRef.current) setTooltip({ ev, rect: e.currentTarget.getBoundingClientRect() });
+                        }}
+                        onMouseLeave={() => setTooltip(null)}
+                        onClick={e => { e.stopPropagation(); if (!resizeRef.current) { setTooltip(null); onEventEdit(ev); } }}
+                      >
+                        <span className="lo-tgev-time">{ev.time}{ev.endTime ? ` – ${ev.endTime}` : ""}</span>
+                        <span className="lo-tgev-title">{matter ? "◇ " : ev.taskId != null ? "✓ " : ""}{ev.title}</span>
+                        <button className="lo-tgev-del" onClick={e2 => { e2.stopPropagation(); onDelete(ev.id); }}>×</button>
+                        <div className="lo-tgev-resize" onMouseDown={e => startResize(e, ev)} />
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-
-      <div className="lo-card lo-timeblock-sidebar">
-        <h3>Drag to schedule</h3>
-        <div className="lo-timeblock-source-label">Tasks</div>
-        <div className="lo-timeblock-source-list">
-          {openTasks.length === 0 && <p className="lo-matter-empty-actions">No open tasks</p>}
-          {openTasks.map(t => {
-            const matter = matterById(t.matterId);
-            return (
-              <div
-                key={t.id}
-                className="lo-timeblock-source-item"
-                draggable
-                onDragStart={e => e.dataTransfer.setData("application/json", JSON.stringify({ kind: "task", id: t.id, title: t.text, matterId: t.matterId } satisfies DragPayload))}
-              >
-                <span>{t.text}</span>
-                {matter && (
-                  <span className={`lo-tag lo-matter-c${matter.id % 8}`}>◇ {matter.name}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+      {tooltip && <EvTooltip ev={tooltip.ev} matterName={matterById(tooltip.ev.matterId)?.name ?? null} rect={tooltip.rect} />}
+    </>
   );
 }
 
-/* ─── Outlook calendar sync ─────────────────────────────────── */
-function OutlookSyncBar() {
-  const { settings, updateSettings, syncOutlook } = useApp();
-  const [url, setUrl] = useState(settings.outlookIcsUrl);
-  const [syncing, setSyncing] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    setUrl(settings.outlookIcsUrl);
-  }, [settings.outlookIcsUrl]);
-
-  const saveUrlIfChanged = async () => {
-    if (url !== settings.outlookIcsUrl) await updateSettings({ outlookIcsUrl: url });
-  };
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setMessage(null);
-    try {
-      await saveUrlIfChanged();
-      const result = await syncOutlook();
-      setMessage(`Synced — ${result.added} added, ${result.updated} updated`);
-    } catch {
-      setMessage("Sync failed — check the calendar link and try again");
-    }
-    setSyncing(false);
-  };
+/* ─── Month view ──────────────────────────────────────────── */
+function MonthView({ year, month, events, today, onDayClick, onTaskDrop, onEventEdit }: {
+  year: number; month: number; events: Event[]; today: string;
+  onDayClick: (date: string) => void;
+  onTaskDrop: (date: string, data: DragPayload) => void;
+  onEventEdit: (ev: Event) => void;
+}) {
+  const days = getDaysInMonth(year, month);
+  const offset = getFirstDay(year, month);
+  const [dragOver, setDragOver] = useState<string | null>(null);
 
   return (
-    <div className="lo-card lo-outlook-sync">
-      <div className="lo-outlook-sync-row">
-        <input
-          type="text"
-          placeholder="Paste your Outlook calendar (ICS) link…"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          onBlur={saveUrlIfChanged}
-        />
-        <button className="lo-btn lo-btn-ghost lo-btn-sm" onClick={handleSync} disabled={syncing || !url.trim()}>
-          {syncing ? "Syncing…" : "Sync now"}
-        </button>
-      </div>
-      <div className="lo-outlook-sync-status">
-        {message ?? (settings.lastOutlookSync
-          ? `Last synced ${new Date(settings.lastOutlookSync).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" })}`
-          : "Not synced yet")}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Calendar page ─────────────────────────────────────────── */
-export default function Calendar() {
-  const { events, addEvent, deleteEvent, today } = useApp();
-  const now = new Date();
-  const [view, setView] = useState<"month" | "week">("month");
-  const [curYear, setCurYear] = useState(now.getFullYear());
-  const [curMonth, setCurMonth] = useState(now.getMonth());
-  const [weekStart, setWeekStart] = useState(getWeekStart(today));
-  const [selected, setSelected] = useState(today);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", date: today, time: "09:00", allDay: false, category: "work" });
-
-  const days = getDaysInMonth(curYear, curMonth);
-  const firstDay = getFirstDay(curYear, curMonth);
-  const monthName = new Date(curYear, curMonth).toLocaleDateString("en-AU", { month: "long", year: "numeric" });
-
-  const selectedEvents = events
-    .filter(e => e.date === selected)
-    .sort((a, b) => {
-      if (a.allDay && !b.allDay) return -1;
-      if (!a.allDay && b.allDay) return 1;
-      return a.time.localeCompare(b.time);
-    });
-
-  const handleAdd = () => {
-    if (!form.title.trim()) return;
-    addEvent({ ...form, time: form.allDay ? "" : form.time, durationMinutes: 60, taskId: null, matterId: null, externalId: null });
-    setForm({ title: "", date: selected, time: "09:00", allDay: false, category: "work" });
-    setShowForm(false);
-  };
-
-  const prevMonth = () => {
-    if (curMonth === 0) { setCurMonth(11); setCurYear(y => y - 1); } else setCurMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (curMonth === 11) { setCurMonth(0); setCurYear(y => y + 1); } else setCurMonth(m => m + 1);
-  };
-
-  return (
-    <div className="lo-calendar-page">
-      <div className="lo-page-header">
-        <h1>Calendar</h1>
-        <p>{events.length} events total</p>
-      </div>
-
-      <OutlookSyncBar />
-
-      <div className="lo-filter-tabs" style={{ marginBottom: 16, width: "fit-content" }}>
-        <button className={`lo-filter-tab ${view === "month" ? "active" : ""}`} onClick={() => setView("month")}>Month</button>
-        <button className={`lo-filter-tab ${view === "week" ? "active" : ""}`} onClick={() => setView("week")}>Week</button>
-      </div>
-
-      {view === "week" ? (
-        <WeekView weekStart={weekStart} setWeekStart={setWeekStart} today={today} />
-      ) : (
-        <div className="lo-calendar-layout">
-          <div className="lo-card lo-cal-card">
-            <div className="lo-cal-header">
-              <button className="lo-icon-btn" onClick={prevMonth}>‹</button>
-              <span className="lo-month-label">{monthName}</span>
-              <button className="lo-icon-btn" onClick={nextMonth}>›</button>
-            </div>
-
-            <div className="lo-cal-grid">
-              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
-                <div key={d} className="lo-cal-dow">{d}</div>
-              ))}
-              {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
-              {Array.from({ length: days }).map((_, i) => {
-                const d = i + 1;
-                const dateStr = `${curYear}-${String(curMonth + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                const hasEvents = events.some(e => e.date === dateStr);
-                const isToday = dateStr === today;
-                const isSelected = dateStr === selected;
-                return (
-                  <button
-                    key={d}
-                    className={`lo-cal-day ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}`}
-                    onClick={() => setSelected(dateStr)}
-                  >
-                    {d}
-                    {hasEvents && <span className="lo-event-dot" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="lo-day-panel">
-            <div className="lo-day-panel-header">
-              <h2>{new Date(selected + "T00:00:00").toLocaleDateString("en-AU", { weekday: "long", month: "long", day: "numeric" })}</h2>
-              <button className="lo-btn lo-btn-primary" onClick={() => { setForm(p => ({ ...p, date: selected })); setShowForm(true); }}>+ Event</button>
-            </div>
-
-            {showForm && (
-              <div className="lo-card lo-add-form" style={{ marginBottom: 12 }}>
-                <input
-                  type="text"
-                  placeholder="Event title..."
-                  value={form.title}
-                  onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                  onKeyDown={e => e.key === "Enter" && handleAdd()}
-                  autoFocus
-                />
-                <div className="lo-form-row">
-                  <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-                  <label className="lo-allday-label">
-                    <input
-                      type="checkbox"
-                      checked={form.allDay}
-                      onChange={e => setForm(p => ({ ...p, allDay: e.target.checked }))}
-                    />
-                    All day
-                  </label>
-                  {!form.allDay && (
-                    <input type="time" value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))} />
-                  )}
-                  <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="lo-form-actions">
-                  <button className="lo-btn lo-btn-primary" onClick={handleAdd}>Add</button>
-                  <button className="lo-btn lo-btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
-                </div>
-              </div>
-            )}
-
-            {selectedEvents.length === 0 ? (
-              <div className="lo-empty-state"><div className="lo-icon">⊡</div>No events — click + to add one</div>
-            ) : (
-              <div className="lo-event-list">
-                {selectedEvents.map(e => (
-                  <div key={e.id} className="lo-event-item lo-card">
-                    <div className={`lo-event-time-badge ${e.allDay ? "lo-allday-badge" : ""}`}>
-                      {e.allDay ? "All day" : e.time}
-                    </div>
-                    <div className="lo-event-info">
-                      <span className="lo-event-name">{e.title}</span>
-                      <span className={`lo-tag lo-tag-${e.category === "work" ? "yellow" : e.category === "health" ? "green" : "gray"}`}>{e.category}</span>
-                    </div>
-                    <button className="lo-delete-btn" onClick={() => deleteEvent(e.id)}>×</button>
+    <div className="lo-month-grid-wrap">
+      <div className="lo-month-grid">
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
+          <div key={d} className="lo-month-dow">{d}</div>
+        ))}
+        {Array.from({ length: offset }).map((_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: days }).map((_, i) => {
+          const d = i + 1;
+          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          const dayEvs = events.filter(e => e.date === dateStr).sort((a, b) => {
+            if (a.allDay && !b.allDay) return -1;
+            if (!a.allDay && b.allDay) return 1;
+            return a.time.localeCompare(b.time);
+          });
+          return (
+            <div
+              key={d}
+              className={`lo-month-day ${dateStr === today ? "today" : ""} ${dragOver === dateStr ? "dragover" : ""}`}
+              onClick={() => onDayClick(dateStr)}
+              onDragOver={e => { e.preventDefault(); setDragOver(dateStr); }}
+              onDragLeave={() => setDragOver(p => p === dateStr ? null : p)}
+              onDrop={e => {
+                e.preventDefault();
+                setDragOver(null);
+                const raw = e.dataTransfer.getData("application/json");
+                if (!raw) return;
+                const data: DragPayload = JSON.parse(raw);
+                if (data.kind === "task") onTaskDrop(dateStr, data);
+              }}
+            >
+              <span className="lo-month-daynum">{d}</span>
+              <div className="lo-month-evs">
+                {dayEvs.slice(0, 3).map(ev => (
+                  <div key={ev.id} className={`lo-month-ev ${mevColor(ev)}`} onClick={e2 => { e2.stopPropagation(); onEventEdit(ev); }}>
+                    {ev.allDay ? ev.title : `${ev.time.slice(0, 5)} ${ev.title}`}
                   </div>
                 ))}
+                {dayEvs.length > 3 && <div className="lo-month-ev-more">+{dayEvs.length - 3} more</div>}
               </div>
-            )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Calendar ───────────────────────────────────────── */
+export default function Calendar() {
+  const { events, addEvent, updateEvent, deleteEvent, tasks, matters, today } = useApp();
+  const [view, setView] = useState<CalView>("week");
+  const [curDate, setCurDate] = useState(today);
+  const [quickSlot, setQuickSlot] = useState<{ date: string; hour: number } | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+
+  const now = new Date(curDate + "T00:00:00");
+  const weekDates = getWeekDates(curDate);
+
+  const navigate = (dir: -1 | 1) => {
+    const d = new Date(curDate + "T00:00:00");
+    if (view === "day") d.setDate(d.getDate() + dir);
+    else if (view === "week") d.setDate(d.getDate() + dir * 7);
+    else d.setMonth(d.getMonth() + dir);
+    setCurDate(toLocalDateStr(d));
+  };
+
+  const periodLabel = () => {
+    if (view === "day") return now.toLocaleDateString("en-AU", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    if (view === "week") {
+      const a = new Date(weekDates[0] + "T00:00:00").toLocaleDateString("en-AU", { month: "short", day: "numeric" });
+      const b = new Date(weekDates[6] + "T00:00:00").toLocaleDateString("en-AU", { month: "short", day: "numeric", year: "numeric" });
+      return `${a} – ${b}`;
+    }
+    return now.toLocaleDateString("en-AU", { month: "long", year: "numeric" });
+  };
+
+  const handleTaskDrop = (date: string, hour: number, data: DragPayload) => {
+    const startTime = `${String(hour).padStart(2, "0")}:00`;
+    const endTime = `${String(hour + 1).padStart(2, "0")}:00`;
+    addEvent({ title: data.title ?? "", date, time: startTime, endTime, allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null });
+  };
+
+  const handleEventMove = (evId: number, date: string, hour: number) => {
+    const ev = events.find(e => e.id === evId);
+    if (!ev) return;
+    const startTime = `${String(hour).padStart(2, "0")}:00`;
+    // preserve duration
+    const [sh, sm] = ev.time.split(":").map(Number);
+    const oldEnd = getEndTime(ev);
+    const [eh, em] = oldEnd.split(":").map(Number);
+    const dur = (eh * 60 + em) - (sh * 60 + sm);
+    const newEndMins = hour * 60 + dur;
+    const newEnd = `${String(Math.floor(newEndMins / 60)).padStart(2, "0")}:${String(newEndMins % 60).padStart(2, "0")}`;
+    updateEvent(evId, { date, time: startTime, endTime: newEnd, allDay: false });
+  };
+
+  const handleEventResize = useCallback((evId: number, newEndTime: string) => {
+    updateEvent(evId, { endTime: newEndTime });
+  }, [updateEvent]);
+
+  const handleMonthTaskDrop = (date: string, data: DragPayload) => {
+    addEvent({ title: data.title ?? "", date, time: "09:00", endTime: "10:00", allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null });
+  };
+
+  const handleQuickAdd = (title: string, category: string, allDay: boolean) => {
+    if (!quickSlot) return;
+    const startTime = `${String(quickSlot.hour).padStart(2, "0")}:00`;
+    const endTime = `${String(quickSlot.hour + 1).padStart(2, "0")}:00`;
+    addEvent({ title, date: quickSlot.date, time: allDay ? "" : startTime, endTime: allDay ? "" : endTime, allDay, category, taskId: null, matterId: null });
+  };
+
+  return (
+    <div className="lo-calendar-page lo-cal-fullpage">
+      <div className="lo-cal-topbar">
+        <div className="lo-cal-topbar-left">
+          <h1 className="lo-cal-title">Calendar</h1>
+          <span className="lo-period-label">{periodLabel()}</span>
+        </div>
+        <div className="lo-cal-topbar-right">
+          <div className="lo-view-tabs">
+            {(["day", "week", "month"] as CalView[]).map(v => (
+              <button key={v} className={`lo-view-tab ${view === v ? "active" : ""}`} onClick={() => setView(v)}>
+                {v.charAt(0).toUpperCase() + v.slice(1)}
+              </button>
+            ))}
+          </div>
+          <div className="lo-cal-nav">
+            <button className="lo-icon-btn" onClick={() => navigate(-1)}>‹</button>
+            <button className="lo-btn lo-btn-ghost lo-btn-sm" onClick={() => setCurDate(today)}>Today</button>
+            <button className="lo-icon-btn" onClick={() => navigate(1)}>›</button>
           </div>
         </div>
+      </div>
+
+      <div className="lo-cal-body">
+        {view !== "month" && <TaskPanel tasks={tasks} matters={matters} />}
+        <div className="lo-cal-content">
+          {view === "month" && (
+            <MonthView
+              year={now.getFullYear()} month={now.getMonth()}
+              events={events} today={today}
+              onDayClick={date => { setCurDate(date); setView("day"); }}
+              onTaskDrop={handleMonthTaskDrop}
+              onEventEdit={setEditingEvent}
+            />
+          )}
+          {view === "week" && (
+            <TimeGrid
+              dates={weekDates} events={events} matters={matters} today={today}
+              onTaskDrop={handleTaskDrop} onEventMove={handleEventMove}
+              onEventResize={handleEventResize}
+              onSlotClick={(date, hour) => setQuickSlot({ date, hour })}
+              onDelete={deleteEvent} onEventEdit={setEditingEvent}
+            />
+          )}
+          {view === "day" && (
+            <TimeGrid
+              dates={[curDate]} events={events} matters={matters} today={today}
+              onTaskDrop={handleTaskDrop} onEventMove={handleEventMove}
+              onEventResize={handleEventResize}
+              onSlotClick={(date, hour) => setQuickSlot({ date, hour })}
+              onDelete={deleteEvent} onEventEdit={setEditingEvent}
+            />
+          )}
+        </div>
+      </div>
+
+      {quickSlot && (
+        <QuickAddModal slot={quickSlot} onAdd={handleQuickAdd} onClose={() => setQuickSlot(null)} />
+      )}
+      {editingEvent && (
+        <EventEditModal
+          ev={editingEvent}
+          matterName={editingEvent.matterId != null ? matters.find(m => m.id === editingEvent.matterId)?.name ?? null : null}
+          onSave={(id, updates) => updateEvent(id, updates)}
+          onDelete={deleteEvent}
+          onClose={() => setEditingEvent(null)}
+        />
       )}
     </div>
   );
