@@ -139,6 +139,7 @@ h3 { font-size: 14px; font-weight: 500; }
 .lo-tag-yellow { background: var(--lo-accent-2-light); color: #9a7420; }
 .lo-tag-red { background: var(--lo-danger-light); color: var(--lo-danger); }
 .lo-tag-gray { background: var(--lo-surface-2); color: var(--lo-text-2); }
+.lo-tag-wait { background: #f0e7fa; color: #6b3fa0; }
 
 /* Per-matter tag colors — deterministic by matter id, so each matter is
    visually distinct at a glance instead of every "linked to a matter"
@@ -506,6 +507,10 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-tgev-title { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lo-tgev-del { background: none; border: none; cursor: pointer; font-size: 14px; color: inherit; opacity: 0.4; padding: 0; line-height: 1; flex-shrink: 0; }
 .lo-tgev-del:hover { opacity: 1; }
+.lo-tgev-track { background: none; border: none; cursor: pointer; font-size: 11px; color: inherit; opacity: 0.4; padding: 0 3px; line-height: 1; flex-shrink: 0; }
+.lo-tgev-track:hover { opacity: 1; }
+.lo-tgev-track.on { opacity: 1; color: #b91c1c; animation: lo-tgev-track-pulse 1.4s ease-in-out infinite; }
+@keyframes lo-tgev-track-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .lo-tgev-resize { position: absolute; bottom: 0; left: 0; right: 0; height: 8px; cursor: ns-resize; border-radius: 0 0 6px 6px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; }
 .lo-tgev-resize::after { content: ""; width: 20px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0.5; }
 .lo-tgev:hover .lo-tgev-resize { opacity: 1; }
@@ -545,6 +550,8 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-qa-modal { width: 300px; }
 .lo-qa-time { font-size: 11px; color: var(--lo-text-3); font-family: 'DM Mono', monospace; margin-bottom: 10px; }
 .lo-qa-input { width: 100%; border: none; border-bottom: 2px solid var(--lo-accent); background: transparent; font-size: 15px; font-family: 'DM Sans', sans-serif; padding: 4px 2px 6px; outline: none; color: var(--lo-text); }
+.lo-actual-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--lo-border); }
+.lo-actual-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--lo-text-3); font-family: 'DM Mono', monospace; margin-bottom: 6px; }
 
 /* ── Event hover tooltip ── */
 .lo-ev-tooltip { background: #1c2028; color: #e8eaf0; border-radius: 10px; padding: 10px 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); font-size: 12px; pointer-events: none; max-width: 220px; }

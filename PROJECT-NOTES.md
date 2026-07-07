@@ -82,6 +82,20 @@ instructions.
 - Eisenhower priority matrix on the Dashboard (Do First / Schedule / Delegate
   / Eliminate), computed from `urgent` OR overdue-or-due-today, crossed with
   `priority === "high"`.
+- Task "waiting on" log: each Task carries a `waits: WaitEntry[]` (description,
+  who/where it's with, sent date, waiting/received status, received date) —
+  the same shape as the pre-existing `MatterAction`, just hung off Task
+  instead of Matter, and reusing its CSS classes. Surfaced as a "Waiting on"
+  section in the task detail panel, a "⏳ Nd · who" badge on the oldest open
+  wait in the task list, and a "Waiting on others" card on the Dashboard
+  listing every task's open waits, oldest first.
+- Calendar planned-vs-actual tracking: `Event.actualTime`/`actualEndTime`
+  alongside the planned `time`/`endTime`. A ⏱ toggle button on each calendar
+  block (▶ start / ⏹ stop / ↺ restart) stamps the current local time; the
+  variance ("+15m over" / "20m under" / "On schedule") shows in the event's
+  hover tooltip and in the edit modal, which also allows manually typing or
+  clearing the actual times. No dual-bar rendering on the grid — variance is
+  surfaced as text only, by design (see decision in that feature's build).
 
 ## Known limitations / open items
 

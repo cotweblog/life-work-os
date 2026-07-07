@@ -8,6 +8,11 @@ interface DashboardProps {
 
 const PROCESS_CATS = ALL_TASK_CATEGORIES.filter(c => c !== "inbox");
 
+function daysSince(dateStr: string): number {
+  if (!dateStr) return 0;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
+
 /* ─── Tasks to be processed (Inbox) ──────────────────────── */
 function InboxCard({ tasks, onProcess, onComplete, onDelete }: {
   tasks: Task[];
@@ -117,6 +122,9 @@ export default function Dashboard({ setActiveView }: DashboardProps) {
   const habitPct = habits.length ? Math.round((habitsToday.length / habits.length) * 100) : 0;
   const openMatters = matters.filter(m => m.status === "open");
   const waitingActions = matters.flatMap(m => m.actions).filter(a => a.status === "waiting");
+  const taskWaits = tasks
+    .flatMap(t => t.waits.filter(w => w.status === "waiting").map(w => ({ ...w, taskId: t.id, taskText: t.text })))
+    .sort((a, b) => a.sentDate.localeCompare(b.sentDate));
 
   const [quickTask, setQuickTask] = useState("");
   const [quickMatter, setQuickMatter] = useState("");
@@ -268,6 +276,26 @@ export default function Dashboard({ setActiveView }: DashboardProps) {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </div>
+
+        <div className="lo-card">
+          <div className="lo-section-header">
+            <h2>Waiting on others</h2>
+            <button className="lo-link-btn" onClick={() => setActiveView("tasks")}>All tasks →</button>
+          </div>
+          {taskWaits.length === 0 ? (
+            <div className="lo-empty-state"><div className="lo-icon">⏳</div>Nothing outstanding</div>
+          ) : (
+            <ul className="lo-task-preview-list">
+              {taskWaits.slice(0, 5).map(w => (
+                <li key={w.id} className="lo-task-preview" onClick={() => setActiveView("tasks")}>
+                  <span className="lo-task-dot" /><span>{w.taskText}</span>
+                  <span className="lo-tag lo-tag-wait">⏳ {daysSince(w.sentDate)}d{w.waitingOn ? ` · ${w.waitingOn}` : ""}</span>
+                </li>
+              ))}
+              {taskWaits.length > 5 && <span className="lo-dash-mq-more">+{taskWaits.length - 5} more</span>}
             </ul>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/context/AppContext";
 import type { Event, Task, Matter } from "@/context/AppContext";
-import { toLocalDateStr } from "@/lib/utils";
+import { toLocalDateStr, toLocalTimeStr } from "@/lib/utils";
 
 const EVENT_CATEGORIES = ["work", "personal", "health", "social", "other"];
 const KNOWN_EV_COLORS = new Set(["work", "personal", "health", "social"]);
@@ -60,6 +60,21 @@ function getEventHeight(ev: Event): number {
   return (dur / 60) * HOUR_H;
 }
 
+function timeToMins(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+// Planned vs. actual variance, e.g. "+30m over" / "20m under" / "On schedule".
+function getVarianceLabel(ev: Event): string | null {
+  if (!ev.actualTime || !ev.actualEndTime) return null;
+  const plannedMins = timeToMins(getEndTime(ev)) - timeToMins(ev.time);
+  const actualMins = timeToMins(ev.actualEndTime) - timeToMins(ev.actualTime);
+  const diff = actualMins - plannedMins;
+  if (diff === 0) return "On schedule";
+  return diff > 0 ? `+${diff}m over` : `${Math.abs(diff)}m under`;
+}
+
 function tgevColor(ev: Event): string {
   if (ev.matterId != null) return `lo-tgev-c${ev.matterId % 8}`;
   return KNOWN_EV_COLORS.has(ev.category) ? `lo-tgev-${ev.category}` : "lo-tgev-other";
@@ -115,6 +130,10 @@ function EvTooltip({ ev, matterName, rect }: { ev: Event; matterName: string | n
       {ev.allDay && <div className="lo-ev-tt-row">⏰ All day</div>}
       <div className="lo-ev-tt-row">🏷 {ev.category}</div>
       {matterName && <div className="lo-ev-tt-row">◇ {matterName}</div>}
+      {ev.actualTime && (
+        <div className="lo-ev-tt-row">⏱ Actual: {ev.actualTime}{ev.actualEndTime ? ` – ${ev.actualEndTime}` : " (in progress)"}</div>
+      )}
+      {getVarianceLabel(ev) && <div className="lo-ev-tt-row">{getVarianceLabel(ev)}</div>}
     </div>
   );
 }
@@ -131,7 +150,10 @@ function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
   const [form, setForm] = useState({
     title: ev.title, date: ev.date, time: ev.time || "09:00", endTime: ev.endTime || defaultEnd,
     category: ev.category, allDay: ev.allDay,
+    actualTime: ev.actualTime, actualEndTime: ev.actualEndTime,
   });
+
+  const variance = getVarianceLabel({ ...ev, time: form.time, endTime: form.endTime, actualTime: form.actualTime, actualEndTime: form.actualEndTime });
 
   const handleSave = () => {
     if (!form.title.trim()) return;
@@ -139,6 +161,7 @@ function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
       title: form.title.trim(), date: form.date,
       time: form.allDay ? "" : form.time, endTime: form.allDay ? "" : form.endTime,
       category: form.category, allDay: form.allDay,
+      actualTime: form.actualTime, actualEndTime: form.actualEndTime,
     });
     onClose();
   };
@@ -172,6 +195,21 @@ function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
             {EVENT_CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
+
+        {!form.allDay && (
+          <div className="lo-actual-block">
+            <label className="lo-actual-label">Actual</label>
+            <div className="lo-form-row" style={{ flexWrap: "wrap", gap: 8 }}>
+              <input type="time" value={form.actualTime} onChange={e => setForm(p => ({ ...p, actualTime: e.target.value }))} />
+              <input type="time" value={form.actualEndTime} onChange={e => setForm(p => ({ ...p, actualEndTime: e.target.value }))} />
+              {(form.actualTime || form.actualEndTime) && (
+                <button className="lo-clear-btn" onClick={() => setForm(p => ({ ...p, actualTime: "", actualEndTime: "" }))}>clear</button>
+              )}
+              {variance && <span className="lo-tag lo-tag-gray">{variance}</span>}
+            </div>
+          </div>
+        )}
+
         <div className="lo-form-actions" style={{ marginTop: 14 }}>
           <button className="lo-btn lo-btn-primary" onClick={handleSave} disabled={!form.title.trim()}>Update</button>
           <button className="lo-btn lo-btn-ghost lo-btn-danger" onClick={() => { onDelete(ev.id); onClose(); }}>Delete</button>
@@ -222,7 +260,7 @@ function QuickAddModal({ slot, onAdd, onClose }: {
 }
 
 /* ─── Time grid (day + week) ──────────────────────────────── */
-function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEventResize, onSlotClick, onDelete, onEventEdit }: {
+function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEventResize, onSlotClick, onDelete, onEventEdit, onToggleTrack }: {
   dates: string[]; events: Event[]; matters: Matter[]; today: string;
   onTaskDrop: (date: string, hour: number, data: DragPayload) => void;
   onEventMove: (evId: number, date: string, hour: number) => void;
@@ -230,6 +268,7 @@ function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEv
   onSlotClick: (date: string, hour: number) => void;
   onDelete: (id: number) => void;
   onEventEdit: (ev: Event) => void;
+  onToggleTrack: (ev: Event) => void;
 }) {
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ ev: Event; rect: DOMRect } | null>(null);
@@ -383,6 +422,13 @@ function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEv
                       >
                         <span className="lo-tgev-time">{ev.time}{ev.endTime ? ` – ${ev.endTime}` : ""}</span>
                         <span className="lo-tgev-title">{matter ? "◇ " : ev.taskId != null ? "✓ " : ""}{ev.title}</span>
+                        <button
+                          className={`lo-tgev-track ${ev.actualTime && !ev.actualEndTime ? "on" : ""}`}
+                          title={!ev.actualTime ? "Start tracking actual time" : !ev.actualEndTime ? "Stop tracking" : "Restart tracking"}
+                          onClick={e2 => { e2.stopPropagation(); onToggleTrack(ev); }}
+                        >
+                          {!ev.actualTime ? "▶" : !ev.actualEndTime ? "⏹" : "↺"}
+                        </button>
                         <button className="lo-tgev-del" onClick={e2 => { e2.stopPropagation(); onDelete(ev.id); }}>×</button>
                         <div className="lo-tgev-resize" onMouseDown={e => startResize(e, ev)} />
                       </div>
@@ -490,7 +536,7 @@ export default function Calendar() {
   const handleTaskDrop = (date: string, hour: number, data: DragPayload) => {
     const startTime = `${String(hour).padStart(2, "0")}:00`;
     const endTime = `${String(hour + 1).padStart(2, "0")}:00`;
-    addEvent({ title: data.title ?? "", date, time: startTime, endTime, allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null });
+    addEvent({ title: data.title ?? "", date, time: startTime, endTime, allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null, actualTime: "", actualEndTime: "" });
   };
 
   const handleEventMove = (evId: number, date: string, hour: number) => {
@@ -512,14 +558,23 @@ export default function Calendar() {
   }, [updateEvent]);
 
   const handleMonthTaskDrop = (date: string, data: DragPayload) => {
-    addEvent({ title: data.title ?? "", date, time: "09:00", endTime: "10:00", allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null });
+    addEvent({ title: data.title ?? "", date, time: "09:00", endTime: "10:00", allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null, actualTime: "", actualEndTime: "" });
   };
 
   const handleQuickAdd = (title: string, category: string, allDay: boolean) => {
     if (!quickSlot) return;
     const startTime = `${String(quickSlot.hour).padStart(2, "0")}:00`;
     const endTime = `${String(quickSlot.hour + 1).padStart(2, "0")}:00`;
-    addEvent({ title, date: quickSlot.date, time: allDay ? "" : startTime, endTime: allDay ? "" : endTime, allDay, category, taskId: null, matterId: null });
+    addEvent({ title, date: quickSlot.date, time: allDay ? "" : startTime, endTime: allDay ? "" : endTime, allDay, category, taskId: null, matterId: null, actualTime: "", actualEndTime: "" });
+  };
+
+  const handleToggleTrack = (ev: Event) => {
+    if (!ev.actualTime || ev.actualEndTime) {
+      // Not started yet, or a previous tracking cycle finished — (re)start.
+      updateEvent(ev.id, { actualTime: toLocalTimeStr(new Date()), actualEndTime: "" });
+    } else {
+      updateEvent(ev.id, { actualEndTime: toLocalTimeStr(new Date()) });
+    }
   };
 
   return (
@@ -564,6 +619,7 @@ export default function Calendar() {
               onEventResize={handleEventResize}
               onSlotClick={(date, hour) => setQuickSlot({ date, hour })}
               onDelete={deleteEvent} onEventEdit={setEditingEvent}
+              onToggleTrack={handleToggleTrack}
             />
           )}
           {view === "day" && (
@@ -573,6 +629,7 @@ export default function Calendar() {
               onEventResize={handleEventResize}
               onSlotClick={(date, hour) => setQuickSlot({ date, hour })}
               onDelete={deleteEvent} onEventEdit={setEditingEvent}
+              onToggleTrack={handleToggleTrack}
             />
           )}
         </div>

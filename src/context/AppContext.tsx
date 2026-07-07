@@ -29,6 +29,15 @@ export interface TaskStep {
   completedAt: string;
 }
 
+export interface WaitEntry {
+  id: number;
+  description: string;
+  waitingOn: string;
+  sentDate: string;
+  status: "waiting" | "received";
+  receivedDate: string;
+}
+
 export interface Task {
   id: number;
   text: string;
@@ -41,6 +50,7 @@ export interface Task {
   matterId: number | null;
   urgent: boolean;
   steps: TaskStep[];
+  waits: WaitEntry[];
 }
 
 export interface Event {
@@ -53,6 +63,8 @@ export interface Event {
   category: string;
   taskId: number | null;
   matterId: number | null;
+  actualTime: string;
+  actualEndTime: string;
 }
 
 export interface Habit {
@@ -76,13 +88,16 @@ export const ALL_TASK_CATEGORIES = ["inbox", "work", "personal", "health", "fina
 
 interface AppContextType {
   tasks: Task[];
-  addTask: (task: Omit<Task, "id" | "done" | "notes" | "steps" | "completedAt" | "urgent"> & { urgent?: boolean }) => Promise<void>;
-  updateTask: (id: number, updates: Partial<Omit<Task, "id" | "steps">>) => Promise<void>;
+  addTask: (task: Omit<Task, "id" | "done" | "notes" | "steps" | "waits" | "completedAt" | "urgent"> & { urgent?: boolean }) => Promise<void>;
+  updateTask: (id: number, updates: Partial<Omit<Task, "id" | "steps" | "waits">>) => Promise<void>;
   toggleTask: (id: number) => Promise<void>;
   deleteTask: (id: number) => Promise<void>;
   addStep: (taskId: number, text: string) => Promise<void>;
   updateStep: (taskId: number, stepId: number, updates: Partial<TaskStep>) => Promise<void>;
   deleteStep: (taskId: number, stepId: number) => Promise<void>;
+  addWait: (taskId: number, w: Omit<WaitEntry, "id" | "status" | "receivedDate">) => Promise<void>;
+  updateWait: (taskId: number, waitId: number, updates: Partial<Omit<WaitEntry, "id">>) => Promise<void>;
+  deleteWait: (taskId: number, waitId: number) => Promise<void>;
   events: Event[];
   addEvent: (event: Omit<Event, "id">) => Promise<void>;
   updateEvent: (id: number, updates: Partial<Omit<Event, "id">>) => Promise<void>;
@@ -146,12 +161,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
 
-  const addTask = async (task: Omit<Task, "id" | "done" | "notes" | "steps" | "completedAt" | "urgent"> & { urgent?: boolean }) => {
+  const addTask = async (task: Omit<Task, "id" | "done" | "notes" | "steps" | "waits" | "completedAt" | "urgent"> & { urgent?: boolean }) => {
     const created = await post("/tasks", { ...task, urgent: task.urgent ?? false });
     setTasks(prev => [...prev, created]);
   };
 
-  const updateTask = async (id: number, updates: Partial<Omit<Task, "id" | "steps">>) => {
+  const updateTask = async (id: number, updates: Partial<Omit<Task, "id" | "steps" | "waits">>) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     await patch(`/tasks/${id}`, updates);
   };
@@ -192,6 +207,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ? { ...t, steps: t.steps.filter(s => s.id !== stepId) }
       : t));
     await del(`/tasks/${taskId}/steps/${stepId}`);
+  };
+
+  const addWait = async (taskId: number, w: Omit<WaitEntry, "id" | "status" | "receivedDate">) => {
+    const wait = await post(`/tasks/${taskId}/waits`, w);
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, waits: [...t.waits, wait] } : t));
+  };
+
+  const updateWait = async (taskId: number, waitId: number, updates: Partial<Omit<WaitEntry, "id">>) => {
+    setTasks(prev => prev.map(t => t.id === taskId
+      ? { ...t, waits: t.waits.map(w => w.id === waitId ? { ...w, ...updates } : w) }
+      : t));
+    await patch(`/tasks/${taskId}/waits/${waitId}`, updates);
+  };
+
+  const deleteWait = async (taskId: number, waitId: number) => {
+    setTasks(prev => prev.map(t => t.id === taskId
+      ? { ...t, waits: t.waits.filter(w => w.id !== waitId) }
+      : t));
+    await del(`/tasks/${taskId}/waits/${waitId}`);
   };
 
   const addEvent = async (event: Omit<Event, "id">) => {
@@ -282,6 +316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       tasks, addTask, updateTask, toggleTask, deleteTask, linkTaskToMatter,
       addStep, updateStep, deleteStep,
+      addWait, updateWait, deleteWait,
       events, addEvent, updateEvent, deleteEvent,
       habits, addHabit, toggleHabitDate, setHabitNote, deleteHabit,
       journal, addJournalEntry, updateJournalEntry, deleteJournalEntry,

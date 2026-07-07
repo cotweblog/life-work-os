@@ -15,6 +15,15 @@ export interface TaskStep {
   completedAt: string;
 }
 
+export interface WaitEntry {
+  id: number;
+  description: string;
+  waitingOn: string;
+  sentDate: string;
+  status: "waiting" | "received";
+  receivedDate: string;
+}
+
 export interface Task {
   id: number;
   text: string;
@@ -27,6 +36,7 @@ export interface Task {
   matterId: number | null;
   urgent: boolean;
   steps: TaskStep[];
+  waits: WaitEntry[];
 }
 
 export interface Event {
@@ -39,6 +49,8 @@ export interface Event {
   category: string;
   taskId: number | null;
   matterId: number | null;
+  actualTime: string;
+  actualEndTime: string;
 }
 
 export interface Habit {
@@ -103,6 +115,7 @@ function load(): DB {
   // Backfill fields added to the schema after some data was already persisted.
   for (const task of parsed.tasks) {
     if (task.urgent === undefined) task.urgent = false;
+    if (!task.waits) task.waits = [];
   }
   for (const habit of parsed.habits) {
     if (!habit.notes) habit.notes = {};
@@ -111,6 +124,8 @@ function load(): DB {
     if (event.endTime === undefined) event.endTime = "";
     if (event.taskId === undefined) event.taskId = null;
     if (event.matterId === undefined) event.matterId = null;
+    if (event.actualTime === undefined) event.actualTime = "";
+    if (event.actualEndTime === undefined) event.actualEndTime = "";
   }
   delete (parsed as { settings?: unknown }).settings;
   return parsed;

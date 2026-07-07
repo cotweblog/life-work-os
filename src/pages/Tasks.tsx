@@ -1,9 +1,22 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useApp, ALL_TASK_CATEGORIES } from "@/context/AppContext";
-import type { Task } from "@/context/AppContext";
+import type { Task, WaitEntry } from "@/context/AppContext";
 
 const CATEGORIES = [...ALL_TASK_CATEGORIES];
 const PRIORITIES = ["high", "medium", "low"] as const;
+
+function daysSince(dateStr: string): number {
+  if (!dateStr) return 0;
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+}
+
+// The wait with the earliest sentDate among still-open ones — i.e. the one
+// that's been outstanding the longest, which is what's most worth surfacing.
+function oldestOpenWait(waits: WaitEntry[]): WaitEntry | null {
+  const open = waits.filter(w => w.status === "waiting");
+  if (open.length === 0) return null;
+  return open.reduce((a, b) => (a.sentDate < b.sentDate ? a : b));
+}
 
 /* ─── Import panel ─────────────────────────────────────────── */
 function parsePastedTasks(raw: string): string[] {
@@ -105,9 +118,14 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matter
   today: string;
   matterName: string | null;
 }) {
-  const { addStep: ctxAddStep, updateStep: ctxUpdateStep, deleteStep: ctxDeleteStep } = useApp();
+  const {
+    addStep: ctxAddStep, updateStep: ctxUpdateStep, deleteStep: ctxDeleteStep,
+    addWait: ctxAddWait, updateWait: ctxUpdateWait, deleteWait: ctxDeleteWait,
+  } = useApp();
   const [newStep, setNewStep] = useState("");
   const stepInputRef = useRef<HTMLInputElement>(null);
+  const [showNewWait, setShowNewWait] = useState(false);
+  const [newWait, setNewWait] = useState({ description: "", waitingOn: "", sentDate: today });
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -136,6 +154,18 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matter
 
   const deleteStep = (stepId: number) => {
     ctxDeleteStep(task.id, stepId);
+  };
+
+  const handleAddWait = async () => {
+    if (!newWait.description.trim()) return;
+    await ctxAddWait(task.id, newWait);
+    setNewWait({ description: "", waitingOn: "", sentDate: today });
+    setShowNewWait(false);
+  };
+
+  const toggleWaitStatus = (w: WaitEntry) => {
+    const nowReceived = w.status !== "received";
+    ctxUpdateWait(task.id, w.id, { status: nowReceived ? "received" : "waiting", receivedDate: nowReceived ? (w.receivedDate || today) : "" });
   };
 
   const completedSteps = task.steps.filter(s => s.done).length;
@@ -284,6 +314,82 @@ function TaskDetail({ task, onClose, onUpdate, onDelete, onToggle, today, matter
             />
             <button className="lo-btn lo-btn-ghost lo-btn-sm" onClick={addStep} disabled={!newStep.trim()}>Add</button>
           </div>
+        </div>
+
+        <div className="lo-detail-section">
+          <div className="lo-detail-section-header">
+            <span>Waiting on</span>
+            <span className="lo-steps-count">
+              {task.waits.filter(w => w.status === "waiting").length > 0 && `${task.waits.filter(w => w.status === "waiting").length} waiting`}
+            </span>
+          </div>
+
+          <div className="lo-matter-actions-list">
+            {task.waits.length === 0 && <p className="lo-matter-empty-actions">Nothing outstanding</p>}
+            {task.waits.map(w => (
+              <div key={w.id} className={`lo-matter-action-card ${w.status === "received" ? "received" : ""}`}>
+                <div className="lo-matter-action-top">
+                  <button
+                    className={`lo-check-btn lo-check-btn-sm ${w.status === "received" ? "checked" : ""}`}
+                    onClick={() => toggleWaitStatus(w)}
+                    title={w.status === "received" ? "Mark as waiting" : "Mark as received"}
+                  >
+                    {w.status === "received" ? "✓" : ""}
+                  </button>
+                  <div className="lo-matter-action-meta">
+                    <span className="lo-matter-action-desc">{w.description}</span>
+                    {w.waitingOn && <span className="lo-matter-action-who">→ {w.waitingOn}</span>}
+                  </div>
+                  <button className="lo-delete-btn lo-delete-btn-sm" onClick={() => ctxDeleteWait(task.id, w.id)}>×</button>
+                </div>
+                <div className="lo-matter-action-dates">
+                  <div className="lo-matter-action-field">
+                    <label>Sent</label>
+                    <input type="date" value={w.sentDate} onChange={e => ctxUpdateWait(task.id, w.id, { sentDate: e.target.value })} />
+                  </div>
+                  {w.status === "waiting" ? (
+                    <span className="lo-tag lo-tag-wait" style={{ alignSelf: "center" }}>{daysSince(w.sentDate)}d waiting</span>
+                  ) : (
+                    <div className="lo-matter-action-field">
+                      <label>Received</label>
+                      <input type="date" value={w.receivedDate} onChange={e => ctxUpdateWait(task.id, w.id, { receivedDate: e.target.value })} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {showNewWait ? (
+            <div className="lo-matter-new-action">
+              <input
+                placeholder="What are you waiting on…"
+                value={newWait.description}
+                onChange={e => setNewWait(p => ({ ...p, description: e.target.value }))}
+                autoFocus
+              />
+              <div className="lo-matter-new-action-row">
+                <input
+                  placeholder="Who / where"
+                  value={newWait.waitingOn}
+                  onChange={e => setNewWait(p => ({ ...p, waitingOn: e.target.value }))}
+                />
+                <input
+                  type="date"
+                  value={newWait.sentDate}
+                  onChange={e => setNewWait(p => ({ ...p, sentDate: e.target.value }))}
+                />
+              </div>
+              <div className="lo-matter-new-action-btns">
+                <button className="lo-btn lo-btn-primary lo-btn-sm" onClick={handleAddWait} disabled={!newWait.description.trim()}>Add</button>
+                <button className="lo-btn lo-btn-ghost lo-btn-sm" onClick={() => setShowNewWait(false)}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button className="lo-btn lo-btn-ghost lo-btn-sm lo-matter-add-action-btn" onClick={() => setShowNewWait(true)}>
+              + Add waiting-on item
+            </button>
+          )}
         </div>
 
         <div className="lo-detail-section">
@@ -459,6 +565,15 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
                   {task.steps.length > 0 && (
                     <span className="lo-tag lo-tag-gray">{completedSteps}/{task.steps.length} steps</span>
                   )}
+                  {oldestOpenWait(task.waits) && (() => {
+                    const w = oldestOpenWait(task.waits)!;
+                    const openCount = task.waits.filter(x => x.status === "waiting").length;
+                    return (
+                      <span className="lo-tag lo-tag-wait">
+                        ⏳ {daysSince(w.sentDate)}d{w.waitingOn ? ` · ${w.waitingOn}` : ""}{openCount > 1 ? ` (+${openCount - 1})` : ""}
+                      </span>
+                    );
+                  })()}
                   {task.notes && <span className="lo-task-notes-dot" title="Has notes">✦</span>}
                 </div>
               </div>

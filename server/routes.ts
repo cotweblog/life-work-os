@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Task, TaskStep, Event, Habit, JournalEntry, Matter, MatterAction } from "./storage.js";
+import type { Task, TaskStep, WaitEntry, Event, Habit, JournalEntry, Matter, MatterAction } from "./storage.js";
 import { db, persist, allocId } from "./storage.js";
 import { chat } from "./ai.js";
 
@@ -24,6 +24,7 @@ router.post("/tasks", (req, res) => {
     completedAt: "",
     notes: "",
     steps: [],
+    waits: [],
   };
   db.tasks.push(task);
   persist();
@@ -73,6 +74,38 @@ router.delete("/tasks/:id/steps/:stepId", (req, res) => {
   const task = db.tasks.find(t => t.id === id);
   if (!task) return notFound(res);
   task.steps = task.steps.filter(s => s.id !== stepId);
+  persist();
+  res.json({ ok: true });
+});
+
+router.post("/tasks/:id/waits", (req, res) => {
+  const id = Number(req.params.id);
+  const task = db.tasks.find(t => t.id === id);
+  if (!task) return notFound(res);
+  const body = req.body as Pick<WaitEntry, "description" | "waitingOn" | "sentDate">;
+  const wait: WaitEntry = { id: allocId(), ...body, status: "waiting", receivedDate: "" };
+  task.waits.push(wait);
+  persist();
+  res.json(wait);
+});
+
+router.patch("/tasks/:id/waits/:waitId", (req, res) => {
+  const id = Number(req.params.id);
+  const waitId = Number(req.params.waitId);
+  const task = db.tasks.find(t => t.id === id);
+  const wait = task?.waits.find(w => w.id === waitId);
+  if (!task || !wait) return notFound(res);
+  Object.assign(wait, req.body);
+  persist();
+  res.json(wait);
+});
+
+router.delete("/tasks/:id/waits/:waitId", (req, res) => {
+  const id = Number(req.params.id);
+  const waitId = Number(req.params.waitId);
+  const task = db.tasks.find(t => t.id === id);
+  if (!task) return notFound(res);
+  task.waits = task.waits.filter(w => w.id !== waitId);
   persist();
   res.json({ ok: true });
 });
