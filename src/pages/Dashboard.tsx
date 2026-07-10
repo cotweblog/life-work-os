@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useApp, ALL_TASK_CATEGORIES } from "@/context/AppContext";
 import type { Task } from "@/context/AppContext";
+import CompleteToast from "@/components/CompleteToast";
 
 interface DashboardProps {
   setActiveView: (view: string) => void;
@@ -128,6 +129,7 @@ export default function Dashboard({ setActiveView }: DashboardProps) {
 
   const [quickTask, setQuickTask] = useState("");
   const [quickMatter, setQuickMatter] = useState("");
+  const [completeToast, setCompleteToast] = useState<{ id: number; text: string } | null>(null);
 
   const handleQuickTask = async () => {
     if (!quickTask.trim()) return;
@@ -138,6 +140,13 @@ export default function Dashboard({ setActiveView }: DashboardProps) {
     if (!quickMatter.trim()) return;
     await addMatter({ name: quickMatter.trim(), description: "", status: "open", openedDate: today, notes: "" });
     setQuickMatter("");
+  };
+
+  const handleInboxComplete = async (id: number) => {
+    const task = tasks.find(t => t.id === id);
+    const wasDone = task?.done;
+    await toggleTask(id);
+    if (task && !wasDone) setCompleteToast({ id: task.id, text: task.text });
   };
 
   return (
@@ -204,9 +213,16 @@ export default function Dashboard({ setActiveView }: DashboardProps) {
       <InboxCard
         tasks={inboxTasks}
         onProcess={(id, category) => updateTask(id, { category })}
-        onComplete={id => toggleTask(id)}
+        onComplete={handleInboxComplete}
         onDelete={id => deleteTask(id)}
       />
+      {completeToast && (
+        <CompleteToast
+          taskId={completeToast.id}
+          taskText={completeToast.text}
+          onDismiss={() => setCompleteToast(null)}
+        />
+      )}
 
       {/* Priority matrix */}
       <EisenhowerMatrix tasks={tasks} today={today} setActiveView={setActiveView} />

@@ -52,6 +52,10 @@ function getEndTime(ev: Event): string {
   return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
 }
 
+function getEventEndDate(ev: Event): string {
+  return ev.endDate || ev.date;
+}
+
 function getEventHeight(ev: Event): number {
   const [sh, sm] = ev.time.split(":").map(Number);
   const endT = getEndTime(ev);
@@ -125,6 +129,7 @@ function EvTooltip({ ev, matterName, rect }: { ev: Event; matterName: string | n
       <div className="lo-ev-tt-title">{ev.title}</div>
       <div className="lo-ev-tt-row">
         📅 {new Date(ev.date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
+        {getEventEndDate(ev) !== ev.date && ` – ${new Date(getEventEndDate(ev) + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}
       </div>
       {!ev.allDay && ev.time && <div className="lo-ev-tt-row">⏰ {ev.time} – {endT}</div>}
       {ev.allDay && <div className="lo-ev-tt-row">⏰ All day</div>}
@@ -148,7 +153,7 @@ function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
 }) {
   const defaultEnd = getEndTime(ev);
   const [form, setForm] = useState({
-    title: ev.title, date: ev.date, time: ev.time || "09:00", endTime: ev.endTime || defaultEnd,
+    title: ev.title, date: ev.date, endDate: getEventEndDate(ev), time: ev.time || "09:00", endTime: ev.endTime || defaultEnd,
     category: ev.category, allDay: ev.allDay,
     actualTime: ev.actualTime, actualEndTime: ev.actualEndTime,
   });
@@ -159,6 +164,7 @@ function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
     if (!form.title.trim()) return;
     onSave(ev.id, {
       title: form.title.trim(), date: form.date,
+      endDate: form.allDay && form.endDate >= form.date ? form.endDate : form.date,
       time: form.allDay ? "" : form.time, endTime: form.allDay ? "" : form.endTime,
       category: form.category, allDay: form.allDay,
       actualTime: form.actualTime, actualEndTime: form.actualEndTime,
@@ -183,13 +189,17 @@ function EventEditModal({ ev, matterName, onSave, onDelete, onClose }: {
           </div>
         )}
         <div className="lo-form-row" style={{ marginTop: 10, flexWrap: "wrap", gap: 8 }}>
-          <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+          <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value, endDate: p.endDate < e.target.value ? e.target.value : p.endDate }))} />
+          {form.allDay && <>
+            <span className="lo-qa-through">through</span>
+            <input type="date" value={form.endDate} min={form.date} onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} />
+          </>}
           {!form.allDay && <>
             <input type="time" value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))} />
             <input type="time" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} />
           </>}
           <label className="lo-allday-label">
-            <input type="checkbox" checked={form.allDay} onChange={e => setForm(p => ({ ...p, allDay: e.target.checked }))} /> All day
+            <input type="checkbox" checked={form.allDay} onChange={e => setForm(p => ({ ...p, allDay: e.target.checked, endDate: e.target.checked ? p.endDate : p.date }))} /> All day
           </label>
           <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
             {EVENT_CATEGORIES.map(c => <option key={c}>{c}</option>)}
@@ -329,7 +339,7 @@ function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEv
 
   const matterById = (id: number | null) => id == null ? null : matters.find(m => m.id === id) ?? null;
   const timedFor = (date: string) => events.filter(e => e.date === date && !e.allDay).sort((a, b) => a.time.localeCompare(b.time));
-  const allDayFor = (date: string) => events.filter(e => e.date === date && e.allDay);
+  const allDayFor = (date: string) => events.filter(e => e.allDay && date >= e.date && date <= getEventEndDate(e));
 
   return (
     <>
@@ -349,7 +359,12 @@ function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEv
           {dates.map(d => (
             <div key={d} className="lo-tgrid-allday-col">
               {allDayFor(d).map(ev => (
-                <div key={ev.id} className="lo-tgrid-allday-chip" onClick={() => onEventEdit(ev)}>
+                <div
+                  key={ev.id}
+                  className="lo-tgrid-allday-chip"
+                  onClick={() => onEventEdit(ev)}
+                  title={getEventEndDate(ev) !== ev.date ? `${ev.date} – ${getEventEndDate(ev)}` : undefined}
+                >
                   <span>{ev.title}</span>
                   <button onClick={e => { e.stopPropagation(); onDelete(ev.id); }}>×</button>
                 </div>
@@ -466,7 +481,7 @@ function MonthView({ year, month, events, today, onDayClick, onTaskDrop, onEvent
         {Array.from({ length: days }).map((_, i) => {
           const d = i + 1;
           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-          const dayEvs = events.filter(e => e.date === dateStr).sort((a, b) => {
+          const dayEvs = events.filter(e => e.allDay ? (dateStr >= e.date && dateStr <= getEventEndDate(e)) : e.date === dateStr).sort((a, b) => {
             if (a.allDay && !b.allDay) return -1;
             if (!a.allDay && b.allDay) return 1;
             return a.time.localeCompare(b.time);
@@ -536,7 +551,7 @@ export default function Calendar() {
   const handleTaskDrop = (date: string, hour: number, data: DragPayload) => {
     const startTime = `${String(hour).padStart(2, "0")}:00`;
     const endTime = `${String(hour + 1).padStart(2, "0")}:00`;
-    addEvent({ title: data.title ?? "", date, time: startTime, endTime, allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null, actualTime: "", actualEndTime: "" });
+    addEvent({ title: data.title ?? "", date, endDate: date, time: startTime, endTime, allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null, actualTime: "", actualEndTime: "" });
   };
 
   const handleEventMove = (evId: number, date: string, hour: number) => {
@@ -558,14 +573,14 @@ export default function Calendar() {
   }, [updateEvent]);
 
   const handleMonthTaskDrop = (date: string, data: DragPayload) => {
-    addEvent({ title: data.title ?? "", date, time: "09:00", endTime: "10:00", allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null, actualTime: "", actualEndTime: "" });
+    addEvent({ title: data.title ?? "", date, endDate: date, time: "09:00", endTime: "10:00", allDay: false, category: "work", taskId: data.id, matterId: data.matterId ?? null, actualTime: "", actualEndTime: "" });
   };
 
   const handleQuickAdd = (title: string, category: string, allDay: boolean) => {
     if (!quickSlot) return;
     const startTime = `${String(quickSlot.hour).padStart(2, "0")}:00`;
     const endTime = `${String(quickSlot.hour + 1).padStart(2, "0")}:00`;
-    addEvent({ title, date: quickSlot.date, time: allDay ? "" : startTime, endTime: allDay ? "" : endTime, allDay, category, taskId: null, matterId: null, actualTime: "", actualEndTime: "" });
+    addEvent({ title, date: quickSlot.date, endDate: quickSlot.date, time: allDay ? "" : startTime, endTime: allDay ? "" : endTime, allDay, category, taskId: null, matterId: null, actualTime: "", actualEndTime: "" });
   };
 
   const handleToggleTrack = (ev: Event) => {

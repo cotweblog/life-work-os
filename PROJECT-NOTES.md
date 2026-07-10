@@ -96,6 +96,19 @@ instructions.
   hover tooltip and in the edit modal, which also allows manually typing or
   clearing the actual times. No dual-bar rendering on the grid — variance is
   surfaced as text only, by design (see decision in that feature's build).
+- Multi-day all-day calendar events: `Event.endDate` (defaults to `date` for
+  single-day events), editable via a "through" date field in the edit modal
+  that only appears when "All day" is checked. Rendered by repeating the same
+  all-day chip in every day cell the span covers (Week/Day's all-day row and
+  Month view) rather than drawing one continuous banner bar — much less
+  rendering risk, at the cost of not looking like a single joined bar.
+- Complete-task toast: checking a task complete (task list, task detail, or
+  the Dashboard inbox) doesn't interrupt the completion — it fires instantly
+  as before — but a dismissible toast then offers "waiting on someone?" for a
+  few seconds, expanding inline into a mini form (who + description,
+  pre-filled with the task text) that logs a `WaitEntry` without a second
+  trip into the task detail panel. Shared component: `src/components/
+  CompleteToast.tsx`.
 
 ## Known limitations / open items
 

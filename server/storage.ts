@@ -43,6 +43,7 @@ export interface Event {
   id: number;
   title: string;
   date: string;
+  endDate: string;
   time: string;
   endTime: string;
   allDay: boolean;
@@ -126,6 +127,7 @@ function load(): DB {
     if (event.matterId === undefined) event.matterId = null;
     if (event.actualTime === undefined) event.actualTime = "";
     if (event.actualEndTime === undefined) event.actualEndTime = "";
+    if (event.endDate === undefined) event.endDate = event.date;
   }
   delete (parsed as { settings?: unknown }).settings;
   return parsed;

@@ -549,6 +549,7 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-qa-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .lo-qa-modal { width: 300px; }
 .lo-qa-time { font-size: 11px; color: var(--lo-text-3); font-family: 'DM Mono', monospace; margin-bottom: 10px; }
+.lo-qa-through { font-size: 12px; color: var(--lo-text-3); align-self: center; }
 .lo-qa-input { width: 100%; border: none; border-bottom: 2px solid var(--lo-accent); background: transparent; font-size: 15px; font-family: 'DM Sans', sans-serif; padding: 4px 2px 6px; outline: none; color: var(--lo-text); }
 .lo-actual-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--lo-border); }
 .lo-actual-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--lo-text-3); font-family: 'DM Mono', monospace; margin-bottom: 6px; }
@@ -1857,3 +1858,29 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-urgent-btn:hover { opacity: 0.6; transform: scale(1.15); }
 .lo-urgent-btn.on { opacity: 1; filter: drop-shadow(0 0 3px #f59e0b); }
 .lo-urgent-btn-sm { font-size: 13px; padding: 1px 2px; }
+
+/* Complete-task toast (waiting-on prompt) */
+.lo-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 300;
+  background: var(--lo-surface);
+  border: 1px solid var(--lo-border);
+  border-radius: var(--lo-radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 340px;
+  animation: lo-toast-in 0.2s ease-out;
+}
+@keyframes lo-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.lo-toast-text { font-size: 13px; color: var(--lo-text); flex: 1; }
+.lo-toast-action { background: none; border: none; color: var(--lo-accent); font-weight: 600; font-size: 13px; cursor: pointer; padding: 4px 6px; flex-shrink: 0; }
+.lo-toast-action:hover { text-decoration: underline; }
+.lo-toast-close { background: none; border: none; color: var(--lo-text-3); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+.lo-toast-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.lo-toast-form input { font-size: 13px; border: 1px solid var(--lo-border); border-radius: 6px; padding: 6px 8px; font-family: 'DM Sans', sans-serif; }
+.lo-toast-form-btns { display: flex; gap: 8px; }

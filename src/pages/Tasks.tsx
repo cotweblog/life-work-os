@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useApp, ALL_TASK_CATEGORIES } from "@/context/AppContext";
 import type { Task, WaitEntry } from "@/context/AppContext";
+import CompleteToast from "@/components/CompleteToast";
 
 const CATEGORIES = [...ALL_TASK_CATEGORIES];
 const PRIORITIES = ["high", "medium", "low"] as const;
@@ -424,6 +425,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
   const [showImport, setShowImport] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<{ text: string; priority: Task["priority"]; due: string; category: string; matterId: number | null }>({ text: "", priority: "medium", due: "", category: defaultCategory, matterId: null });
+  const [completeToast, setCompleteToast] = useState<{ id: number; text: string } | null>(null);
 
   const base = categoryFilter
     ? tasks.filter(t => t.category === categoryFilter)
@@ -459,6 +461,13 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
     taskNames.forEach(text => addTask({ text, priority: priority as "high" | "medium" | "low", due: "", category, matterId: null }));
   };
 
+  const handleToggle = async (id: number) => {
+    const task = tasks.find(t => t.id === id);
+    const wasDone = task?.done;
+    await toggleTask(id);
+    if (task && !wasDone) setCompleteToast({ id: task.id, text: task.text });
+  };
+
   return (
     <div className="lo-tasks-page">
       {showImport && (
@@ -471,9 +480,16 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
           onClose={() => setSelectedId(null)}
           onUpdate={updateTask}
           onDelete={deleteTask}
-          onToggle={toggleTask}
+          onToggle={handleToggle}
           today={today}
           matterName={matterName(selectedTask.matterId)}
+        />
+      )}
+      {completeToast && (
+        <CompleteToast
+          taskId={completeToast.id}
+          taskText={completeToast.text}
+          onDismiss={() => setCompleteToast(null)}
         />
       )}
 
@@ -546,7 +562,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
             >
               <button
                 className={`lo-check-btn ${task.done ? "checked" : ""}`}
-                onClick={e => { e.stopPropagation(); toggleTask(task.id); }}
+                onClick={e => { e.stopPropagation(); handleToggle(task.id); }}
               >
                 {task.done ? "✓" : ""}
               </button>
