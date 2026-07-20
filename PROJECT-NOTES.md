@@ -54,7 +54,11 @@ instructions.
   Replit export, which was frontend-only).
 - Matter ↔ Task linking: badge/tag on task rows and detail panel, a picker in
   the add-task form, and inline-editable "waiting for" actions and linked
-  tasks inside a Matter's own panel (originally read-only spans).
+  tasks inside a Matter's own panel (originally read-only spans). Clicking a
+  linked task inside a Matter now opens the same full `TaskDetail` panel used
+  on the Tasks page (priority, category, due date, steps, waiting-on log,
+  notes) instead of a bare checkbox + editable-text row — `TaskDetail` was
+  extracted to `src/components/TaskDetail.tsx` so both pages share it.
 - Tasks sort by due date (open-before-done, earliest first, undated last).
 - Each matter gets a distinct, deterministic tag color (8-color palette keyed
   by matter id) instead of one flat gray.

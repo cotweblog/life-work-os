@@ -1786,10 +1786,13 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 
 /* Matter task rows */
 .lo-matter-tasks-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.lo-matter-task-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--lo-border-light, #f0f0ec); }
+.lo-matter-task-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 6px; border-bottom: 1px solid var(--lo-border-light, #f0f0ec); border-radius: 6px; }
 .lo-matter-task-row:last-child { border-bottom: none; }
 .lo-matter-task-row.done .lo-matter-task-text { text-decoration: line-through; color: var(--lo-text-muted); }
-.lo-matter-task-text { flex: 1; font-family: inherit; font-size: 13px; color: var(--lo-text); border: none; background: transparent; padding: 0; outline: none; }
+.lo-matter-task-row-clickable { cursor: pointer; transition: background var(--lo-transition); }
+.lo-matter-task-row-clickable:hover { background: var(--lo-bg); }
+.lo-matter-task-body { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-top: 2px; }
+.lo-matter-task-text { display: block; font-size: 13px; color: var(--lo-text); }
 .lo-matter-task-badge { font-size: 11px; font-weight: 600; color: var(--lo-accent); background: color-mix(in srgb, var(--lo-accent) 10%, transparent); padding: 2px 7px; border-radius: 10px; }
 .lo-matter-task-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 .lo-matter-new-task { border: 1px dashed var(--lo-border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }

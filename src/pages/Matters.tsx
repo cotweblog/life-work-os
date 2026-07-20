@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import type { Matter, MatterAction, Task } from "@/context/AppContext";
+import TaskDetail from "@/components/TaskDetail";
+import CompleteToast from "@/components/CompleteToast";
 
 const STATUS_LABELS: Record<string, string> = { open: "Open", pending: "Pending", closed: "Closed" };
 const STATUS_COLORS: Record<string, string> = { open: "lo-badge-open", pending: "lo-badge-pending", closed: "lo-badge-closed" };
@@ -17,12 +19,14 @@ function MatterDetail({ matter, onClose, today }: {
   onClose: () => void;
   today: string;
 }) {
-  const { tasks, addTask, updateTask, toggleTask, linkTaskToMatter, updateMatter, deleteMatter, addMatterAction, updateMatterAction, deleteMatterAction } = useApp();
+  const { tasks, addTask, updateTask, toggleTask, deleteTask, linkTaskToMatter, updateMatter, deleteMatter, addMatterAction, updateMatterAction, deleteMatterAction } = useApp();
   const [newAction, setNewAction] = useState({ description: "", sentTo: "", sentDate: today, neededFrom: "" });
   const [showNewAction, setShowNewAction] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
   const [showNewTask, setShowNewTask] = useState(false);
   const [linkingTaskId, setLinkingTaskId] = useState<string>("");
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [completeToast, setCompleteToast] = useState<{ id: number; text: string } | null>(null);
 
   const linkedTasks = tasks.filter(t => t.matterId === matter.id);
   const unlinkableTasks = tasks.filter(t => t.matterId == null && !t.done);
@@ -33,6 +37,15 @@ function MatterDetail({ matter, onClose, today }: {
     setNewTaskText("");
     setShowNewTask(false);
   };
+
+  const handleToggleTask = async (id: number) => {
+    const task = tasks.find(t => t.id === id);
+    const wasDone = task?.done;
+    await toggleTask(id);
+    if (task && !wasDone) setCompleteToast({ id: task.id, text: task.text });
+  };
+
+  const selectedTask = tasks.find(t => t.id === selectedTaskId) ?? null;
 
   const handleLinkTask = async () => {
     if (!linkingTaskId) return;
@@ -68,6 +81,24 @@ function MatterDetail({ matter, onClose, today }: {
     <>
       <div className="lo-detail-backdrop" onClick={onClose} />
       <div className="lo-detail-panel lo-matter-panel">
+        {selectedTask && (
+          <TaskDetail
+            task={selectedTask}
+            onClose={() => setSelectedTaskId(null)}
+            onUpdate={updateTask}
+            onDelete={deleteTask}
+            onToggle={handleToggleTask}
+            today={today}
+            matterName={matter.name}
+          />
+        )}
+        {completeToast && (
+          <CompleteToast
+            taskId={completeToast.id}
+            taskText={completeToast.text}
+            onDismiss={() => setCompleteToast(null)}
+          />
+        )}
         <div className="lo-detail-header">
           <div className={`lo-badge ${STATUS_COLORS[matter.status]}`}>{STATUS_LABELS[matter.status]}</div>
           <input
@@ -233,26 +264,44 @@ function MatterDetail({ matter, onClose, today }: {
             {linkedTasks.length === 0 && !showNewTask && (
               <p className="lo-matter-empty-actions">No tasks linked yet</p>
             )}
-            {linkedTasks.map(t => (
-              <div key={t.id} className={`lo-matter-task-row ${t.done ? "done" : ""}`}>
-                <button
-                  className={`lo-check-btn lo-check-btn-sm ${t.done ? "checked" : ""}`}
-                  onClick={() => toggleTask(t.id)}
+            {linkedTasks.map(t => {
+              const isOverdue = t.due && t.due < today && !t.done;
+              const openWait = t.waits.filter(w => w.status === "waiting").sort((a, b) => a.sentDate.localeCompare(b.sentDate))[0];
+              return (
+                <div
+                  key={t.id}
+                  className={`lo-matter-task-row lo-matter-task-row-clickable ${t.done ? "done" : ""}`}
+                  onClick={() => setSelectedTaskId(t.id)}
                 >
-                  {t.done ? "✓" : ""}
-                </button>
-                <input
-                  className="lo-matter-task-text"
-                  value={t.text}
-                  onChange={e => updateTask(t.id, { text: e.target.value })}
-                />
-                <button
-                  className="lo-delete-btn lo-delete-btn-sm"
-                  title="Unlink task"
-                  onClick={() => linkTaskToMatter(t.id, null)}
-                >×</button>
-              </div>
-            ))}
+                  <button
+                    className={`lo-check-btn lo-check-btn-sm ${t.done ? "checked" : ""}`}
+                    onClick={e => { e.stopPropagation(); handleToggleTask(t.id); }}
+                  >
+                    {t.done ? "✓" : ""}
+                  </button>
+                  <div className="lo-matter-task-body">
+                    <span className="lo-matter-task-text">{t.text}</span>
+                    <div className="lo-task-meta">
+                      <span className={`lo-tag lo-tag-${t.priority === "high" ? "red" : t.priority === "medium" ? "yellow" : "gray"}`}>{t.priority}</span>
+                      {t.due && <span className={`lo-tag ${isOverdue ? "lo-tag-red" : "lo-tag-gray"}`}>{isOverdue ? "overdue · " : ""}{t.due}</span>}
+                      {t.steps.length > 0 && (
+                        <span className="lo-tag lo-tag-gray">{t.steps.filter(s => s.done).length}/{t.steps.length} steps</span>
+                      )}
+                      {openWait && (
+                        <span className="lo-tag lo-tag-wait">⏳ {daysSince(openWait.sentDate)}d{openWait.waitingOn ? ` · ${openWait.waitingOn}` : ""}</span>
+                      )}
+                      {t.notes && <span className="lo-task-notes-dot" title="Has notes">✦</span>}
+                    </div>
+                  </div>
+                  <button
+                    className="lo-delete-btn lo-delete-btn-sm"
+                    title="Unlink task"
+                    onClick={e => { e.stopPropagation(); linkTaskToMatter(t.id, null); }}
+                  >×</button>
+                  <span className="lo-task-chevron">›</span>
+                </div>
+              );
+            })}
           </div>
 
           {showNewTask ? (
