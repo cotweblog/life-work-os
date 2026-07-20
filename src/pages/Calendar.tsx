@@ -436,7 +436,7 @@ function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEv
                         onClick={e => { e.stopPropagation(); if (!resizeRef.current) { setTooltip(null); onEventEdit(ev); } }}
                       >
                         <span className="lo-tgev-time">{ev.time}{ev.endTime ? ` – ${ev.endTime}` : ""}</span>
-                        <span className="lo-tgev-title">{matter ? "◇ " : ev.taskId != null ? "✓ " : ""}{ev.title}</span>
+                        <span className="lo-tgev-title">{matter ? `◇ ${matter.name}: ` : ev.taskId != null ? "✓ " : ""}{ev.title}</span>
                         <button
                           className={`lo-tgev-track ${ev.actualTime && !ev.actualEndTime ? "on" : ""}`}
                           title={!ev.actualTime ? "Start tracking actual time" : !ev.actualEndTime ? "Stop tracking" : "Restart tracking"}
@@ -461,8 +461,8 @@ function TimeGrid({ dates, events, matters, today, onTaskDrop, onEventMove, onEv
 }
 
 /* ─── Month view ──────────────────────────────────────────── */
-function MonthView({ year, month, events, today, onDayClick, onTaskDrop, onEventEdit }: {
-  year: number; month: number; events: Event[]; today: string;
+function MonthView({ year, month, events, matters, today, onDayClick, onTaskDrop, onEventEdit }: {
+  year: number; month: number; events: Event[]; matters: Matter[]; today: string;
   onDayClick: (date: string) => void;
   onTaskDrop: (date: string, data: DragPayload) => void;
   onEventEdit: (ev: Event) => void;
@@ -470,6 +470,7 @@ function MonthView({ year, month, events, today, onDayClick, onTaskDrop, onEvent
   const days = getDaysInMonth(year, month);
   const offset = getFirstDay(year, month);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const matterById = (id: number | null) => id == null ? null : matters.find(m => m.id === id) ?? null;
 
   return (
     <div className="lo-month-grid-wrap">
@@ -504,11 +505,15 @@ function MonthView({ year, month, events, today, onDayClick, onTaskDrop, onEvent
             >
               <span className="lo-month-daynum">{d}</span>
               <div className="lo-month-evs">
-                {dayEvs.slice(0, 3).map(ev => (
-                  <div key={ev.id} className={`lo-month-ev ${mevColor(ev)}`} onClick={e2 => { e2.stopPropagation(); onEventEdit(ev); }}>
-                    {ev.allDay ? ev.title : `${ev.time.slice(0, 5)} ${ev.title}`}
-                  </div>
-                ))}
+                {dayEvs.slice(0, 3).map(ev => {
+                  const matter = matterById(ev.matterId);
+                  const prefix = matter ? `◇ ${matter.name}: ` : ev.taskId != null ? "✓ " : "";
+                  return (
+                    <div key={ev.id} className={`lo-month-ev ${mevColor(ev)}`} onClick={e2 => { e2.stopPropagation(); onEventEdit(ev); }}>
+                      {ev.allDay ? `${prefix}${ev.title}` : `${ev.time.slice(0, 5)} ${prefix}${ev.title}`}
+                    </div>
+                  );
+                })}
                 {dayEvs.length > 3 && <div className="lo-month-ev-more">+{dayEvs.length - 3} more</div>}
               </div>
             </div>
@@ -621,7 +626,7 @@ export default function Calendar() {
           {view === "month" && (
             <MonthView
               year={now.getFullYear()} month={now.getMonth()}
-              events={events} today={today}
+              events={events} matters={matters} today={today}
               onDayClick={date => { setCurDate(date); setView("day"); }}
               onTaskDrop={handleMonthTaskDrop}
               onEventEdit={setEditingEvent}

@@ -73,6 +73,10 @@ instructions.
   bottom edge; clicking an empty slot opens a quick-add modal, clicking an
   event opens a full edit modal; hovering an event shows a tooltip with time/
   category/matter. Matters are *not* a direct drag source — only tasks.
+  Matter-linked events show the matter's name directly in the block/cell
+  text ("◇ Matter name: Task title", in both the Week/Day grid and Month
+  view) rather than just the color-coded diamond icon — color alone wasn't
+  enough to identify which matter without hovering for the tooltip.
 - Unified Work/Personal workspace (merged in from a Replit iteration): the
   Sidebar mode toggle and `viewMode`/`WORK_CATEGORIES`/`PERSONAL_CATEGORIES`
   are gone. `AppContext.tsx` now exposes a single `ALL_TASK_CATEGORIES =
