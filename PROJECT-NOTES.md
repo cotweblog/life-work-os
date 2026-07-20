@@ -81,7 +81,11 @@ instructions.
   toggle on task rows and in the task detail panel.
 - Eisenhower priority matrix on the Dashboard (Do First / Schedule / Delegate
   / Eliminate), computed from `urgent` OR overdue-or-due-today, crossed with
-  `priority === "high"`.
+  `priority === "high"`. The same matrix is also a full "matrix" filter tab on
+  the Tasks page itself (bigger quadrants, full task rows, all open tasks not
+  just the top 5). Independently of that view, "Do First" tasks (urgent +
+  important) always sort to the top of the plain task list too, ahead of
+  due-date ordering — that's the point of the quadrant.
 - Task "waiting on" log: each Task carries a `waits: WaitEntry[]` (description,
   who/where it's with, sent date, waiting/received status, received date) —
   the same shape as the pre-existing `MatterAction`, just hung off Task

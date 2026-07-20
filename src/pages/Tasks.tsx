@@ -431,6 +431,12 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
     ? tasks.filter(t => t.category === categoryFilter)
     : tasks;
 
+  // "Do First" (urgent + important) tasks jump to the top of the list,
+  // ahead of due-date ordering — that's the whole point of the quadrant.
+  const isUrgent = (t: Task) => t.urgent || (!t.done && !!t.due && t.due <= today);
+  const isImportant = (t: Task) => t.priority === "high";
+  const isDoFirst = (t: Task) => isUrgent(t) && isImportant(t);
+
   const filtered = base
     .filter(t => {
       if (filter === "today") return t.due === today && !t.done;
@@ -440,6 +446,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
     })
     .sort((a, b) => {
       if (a.done !== b.done) return a.done ? 1 : -1;
+      if (isDoFirst(a) !== isDoFirst(b)) return isDoFirst(a) ? -1 : 1;
       if (!a.due && !b.due) return 0;
       if (!a.due) return 1;
       if (!b.due) return -1;
@@ -466,6 +473,63 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
     const wasDone = task?.done;
     await toggleTask(id);
     if (task && !wasDone) setCompleteToast({ id: task.id, text: task.text });
+  };
+
+  const openBase = base.filter(t => !t.done);
+  const quadrants = [
+    { label: "Do First",      sub: "Urgent · Important",         tasks: openBase.filter(t => isUrgent(t) && isImportant(t)),   cls: "lo-mq-q1" },
+    { label: "Schedule",      sub: "Not Urgent · Important",     tasks: openBase.filter(t => !isUrgent(t) && isImportant(t)),  cls: "lo-mq-q2" },
+    { label: "Delegate",      sub: "Urgent · Not Important",     tasks: openBase.filter(t => isUrgent(t) && !isImportant(t)),  cls: "lo-mq-q3" },
+    { label: "Deprioritise",  sub: "Not Urgent · Not Important", tasks: openBase.filter(t => !isUrgent(t) && !isImportant(t)), cls: "lo-mq-q4" },
+  ];
+
+  const renderTaskRow = (task: Task) => {
+    const isOverdue = task.due && task.due < today && !task.done;
+    const completedSteps = task.steps.filter(s => s.done).length;
+    const wait = oldestOpenWait(task.waits);
+    return (
+      <div
+        key={task.id}
+        className={`lo-task-item lo-card ${task.done ? "done" : ""} ${isOverdue ? "overdue" : ""} ${selectedId === task.id ? "selected" : ""}`}
+        onClick={() => setSelectedId(task.id)}
+      >
+        <button
+          className={`lo-check-btn ${task.done ? "checked" : ""}`}
+          onClick={e => { e.stopPropagation(); handleToggle(task.id); }}
+        >
+          {task.done ? "✓" : ""}
+        </button>
+        <div className="lo-task-body">
+          <span className="lo-task-text">{task.text}</span>
+          <div className="lo-task-meta">
+            <span className={`lo-tag lo-tag-${task.priority === "high" ? "red" : task.priority === "medium" ? "yellow" : "gray"}`}>{task.priority}</span>
+            <span className="lo-tag lo-tag-gray">{task.category}</span>
+            {matterName(task.matterId) && (
+              <span className={`lo-tag ${matterColorClass(task.matterId)}`}>◇ {matterName(task.matterId)}</span>
+            )}
+            {task.done && task.completedAt
+              ? <span className="lo-tag lo-tag-green">✓ {task.completedAt}</span>
+              : task.due && <span className={`lo-tag ${isOverdue ? "lo-tag-red" : "lo-tag-gray"}`}>{isOverdue ? "overdue · " : ""}{task.due}</span>
+            }
+            {task.steps.length > 0 && (
+              <span className="lo-tag lo-tag-gray">{completedSteps}/{task.steps.length} steps</span>
+            )}
+            {wait && (
+              <span className="lo-tag lo-tag-wait">
+                ⏳ {daysSince(wait.sentDate)}d{wait.waitingOn ? ` · ${wait.waitingOn}` : ""}{task.waits.filter(x => x.status === "waiting").length > 1 ? ` (+${task.waits.filter(x => x.status === "waiting").length - 1})` : ""}
+              </span>
+            )}
+            {task.notes && <span className="lo-task-notes-dot" title="Has notes">✦</span>}
+          </div>
+        </div>
+        <button
+          className={`lo-urgent-btn${task.urgent ? " on" : ""}`}
+          title={task.urgent ? "Unmark urgent" : "Mark urgent"}
+          onClick={e => { e.stopPropagation(); updateTask(task.id, { urgent: !task.urgent }); }}
+        >⚡</button>
+        <span className="lo-task-chevron">›</span>
+      </div>
+    );
   };
 
   return (
@@ -500,7 +564,7 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
 
       <div className="lo-tasks-toolbar">
         <div className="lo-filter-tabs">
-          {(["all", "today", "open", "done"]).map(f => (
+          {(["all", "today", "open", "matrix", "done"]).map(f => (
             <button key={f} className={`lo-filter-tab ${filter === f ? "active" : ""}`} onClick={() => setFilter(f)}>
               {f}
             </button>
@@ -549,60 +613,27 @@ export default function Tasks({ categoryFilter }: { categoryFilter?: string } = 
         </div>
       )}
 
-      <div className="lo-task-list">
-        {filtered.length === 0 && <div className="lo-empty-state"><div className="lo-icon">✓</div>No tasks here</div>}
-        {filtered.map(task => {
-          const isOverdue = task.due && task.due < today && !task.done;
-          const completedSteps = task.steps.filter(s => s.done).length;
-          return (
-            <div
-              key={task.id}
-              className={`lo-task-item lo-card ${task.done ? "done" : ""} ${isOverdue ? "overdue" : ""} ${selectedId === task.id ? "selected" : ""}`}
-              onClick={() => setSelectedId(task.id)}
-            >
-              <button
-                className={`lo-check-btn ${task.done ? "checked" : ""}`}
-                onClick={e => { e.stopPropagation(); handleToggle(task.id); }}
-              >
-                {task.done ? "✓" : ""}
-              </button>
-              <div className="lo-task-body">
-                <span className="lo-task-text">{task.text}</span>
-                <div className="lo-task-meta">
-                  <span className={`lo-tag lo-tag-${task.priority === "high" ? "red" : task.priority === "medium" ? "yellow" : "gray"}`}>{task.priority}</span>
-                  <span className="lo-tag lo-tag-gray">{task.category}</span>
-                  {matterName(task.matterId) && (
-                    <span className={`lo-tag ${matterColorClass(task.matterId)}`}>◇ {matterName(task.matterId)}</span>
-                  )}
-                  {task.done && task.completedAt
-                    ? <span className="lo-tag lo-tag-green">✓ {task.completedAt}</span>
-                    : task.due && <span className={`lo-tag ${isOverdue ? "lo-tag-red" : "lo-tag-gray"}`}>{isOverdue ? "overdue · " : ""}{task.due}</span>
-                  }
-                  {task.steps.length > 0 && (
-                    <span className="lo-tag lo-tag-gray">{completedSteps}/{task.steps.length} steps</span>
-                  )}
-                  {oldestOpenWait(task.waits) && (() => {
-                    const w = oldestOpenWait(task.waits)!;
-                    const openCount = task.waits.filter(x => x.status === "waiting").length;
-                    return (
-                      <span className="lo-tag lo-tag-wait">
-                        ⏳ {daysSince(w.sentDate)}d{w.waitingOn ? ` · ${w.waitingOn}` : ""}{openCount > 1 ? ` (+${openCount - 1})` : ""}
-                      </span>
-                    );
-                  })()}
-                  {task.notes && <span className="lo-task-notes-dot" title="Has notes">✦</span>}
-                </div>
+      {filter === "matrix" ? (
+        <div className="lo-tasks-matrix">
+          {quadrants.map(q => (
+            <div key={q.label} className={`lo-matrix-quadrant ${q.cls}`}>
+              <div className="lo-matrix-qhd">
+                <span className="lo-matrix-qlabel">{q.label}</span>
+                <span className="lo-matrix-qsub">{q.sub}</span>
               </div>
-              <button
-                className={`lo-urgent-btn${task.urgent ? " on" : ""}`}
-                title={task.urgent ? "Unmark urgent" : "Mark urgent"}
-                onClick={e => { e.stopPropagation(); updateTask(task.id, { urgent: !task.urgent }); }}
-              >⚡</button>
-              <span className="lo-task-chevron">›</span>
+              <div className="lo-matrix-qbody">
+                {q.tasks.length === 0 && <span className="lo-matrix-empty">None</span>}
+                {q.tasks.map(renderTaskRow)}
+              </div>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="lo-task-list">
+          {filtered.length === 0 && <div className="lo-empty-state"><div className="lo-icon">✓</div>No tasks here</div>}
+          {filtered.map(renderTaskRow)}
+        </div>
+      )}
     </div>
   );
 }

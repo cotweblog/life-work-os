@@ -1853,6 +1853,28 @@ input:focus, textarea:focus, select:focus { border-color: var(--lo-accent); }
 .lo-dash-mq.lo-mq-q4 .lo-dash-mq-hd { background: var(--lo-surface-2); }
 .lo-dash-mq.lo-mq-q4 .lo-dash-mq-label { color: var(--lo-text-2); }
 
+/* Full priority matrix (Tasks page) */
+.lo-tasks-matrix { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
+.lo-matrix-quadrant { border: 1.5px solid var(--lo-border); border-radius: var(--lo-radius); overflow: hidden; display: flex; flex-direction: column; min-height: 220px; max-height: 460px; background: var(--lo-surface); }
+.lo-matrix-qhd { padding: 10px 14px 8px; border-bottom: 1px solid var(--lo-border); flex-shrink: 0; }
+.lo-matrix-qlabel { display: block; font-size: 14px; font-weight: 700; }
+.lo-matrix-qsub { display: block; font-size: 11px; color: var(--lo-text-3); margin-top: 2px; }
+.lo-matrix-qbody { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.lo-matrix-empty { font-size: 12px; color: var(--lo-text-3); padding: 8px 4px; }
+
+.lo-matrix-quadrant.lo-mq-q1 { border-color: #fecaca; }
+.lo-matrix-quadrant.lo-mq-q1 .lo-matrix-qhd { background: #fff5f5; }
+.lo-matrix-quadrant.lo-mq-q1 .lo-matrix-qlabel { color: #b91c1c; }
+.lo-matrix-quadrant.lo-mq-q2 { border-color: #bbf7d0; }
+.lo-matrix-quadrant.lo-mq-q2 .lo-matrix-qhd { background: #f0faf4; }
+.lo-matrix-quadrant.lo-mq-q2 .lo-matrix-qlabel { color: var(--lo-accent); }
+.lo-matrix-quadrant.lo-mq-q3 { border-color: #fde68a; }
+.lo-matrix-quadrant.lo-mq-q3 .lo-matrix-qhd { background: #fffbeb; }
+.lo-matrix-quadrant.lo-mq-q3 .lo-matrix-qlabel { color: #b45309; }
+.lo-matrix-quadrant.lo-mq-q4 { border-color: var(--lo-border); }
+.lo-matrix-quadrant.lo-mq-q4 .lo-matrix-qhd { background: var(--lo-surface-2); }
+.lo-matrix-quadrant.lo-mq-q4 .lo-matrix-qlabel { color: var(--lo-text-2); }
+
 /* Urgent toggle button (task rows/detail) */
 .lo-urgent-btn { background: none; border: none; cursor: pointer; font-size: 16px; opacity: 0.25; transition: opacity 0.15s, transform 0.15s; padding: 2px 4px; line-height: 1; flex-shrink: 0; }
 .lo-urgent-btn:hover { opacity: 0.6; transform: scale(1.15); }
